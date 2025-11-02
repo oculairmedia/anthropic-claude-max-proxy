@@ -35,6 +35,7 @@ def count_content_chars(content: Union[str, List[Dict[str, Any]]]) -> int:
 
 
 @router.post("/v1/messages/count_tokens")
+@router.post("/v1/beta/messages/count_tokens")  # Beta API endpoint
 async def count_tokens(request: CountTokensRequest, raw_request: Request):
     """
     Count tokens for Anthropic messages.
