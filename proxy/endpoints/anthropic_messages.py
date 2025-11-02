@@ -16,6 +16,7 @@ from anthropic import (
     make_anthropic_request,
     stream_anthropic_response,
 )
+from models.resolution import resolve_model_metadata
 from oauth import OAuthManager
 import settings
 from stream_debug import maybe_create_stream_tracer
@@ -49,6 +50,12 @@ async def anthropic_messages(request: AnthropicMessageRequest, raw_request: Requ
 
     # Prepare Anthropic request (pass through client parameters directly)
     anthropic_request = request.model_dump()
+
+    # Resolve model name to Anthropic ID (handles short names like "sonnet-4-5")
+    model_name = anthropic_request.get("model")
+    anthropic_id, reasoning_level, use_1m_context = resolve_model_metadata(model_name)
+    anthropic_request["model"] = anthropic_id
+    logger.debug(f"[{request_id}] Resolved model '{model_name}' -> '{anthropic_id}'")
 
     # Ensure max_tokens is sufficient if thinking is enabled
     thinking = anthropic_request.get("thinking")
