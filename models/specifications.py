@@ -39,6 +39,7 @@ class ModelRegistryEntry:
         data: Dict[str, int | str | bool] = {
             "id": self.openai_id,
             "object": "model",
+            "type": "model",  # Required by Letta's AnthropicProvider
             "created": self.created,
             "owned_by": self.owned_by,
             "context_length": self.context_length,

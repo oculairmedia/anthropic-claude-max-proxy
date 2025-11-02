@@ -11,6 +11,7 @@ from .endpoints import (
     auth_router,
     anthropic_messages_router,
     openai_chat_router,
+    count_tokens_router,
 )
 
 logger = logging.getLogger(__name__)
@@ -27,5 +28,6 @@ app.include_router(models_router)
 app.include_router(auth_router)
 app.include_router(anthropic_messages_router)
 app.include_router(openai_chat_router)
+app.include_router(count_tokens_router)
 
 logger.debug("FastAPI application initialized with all routers and middleware")
