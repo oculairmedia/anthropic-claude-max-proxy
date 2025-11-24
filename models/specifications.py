@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, Optional, List
+from typing import Dict, Optional, List, Any
 
 from .reasoning import REASONING_BUDGET_MAP
 
@@ -35,8 +35,8 @@ class ModelRegistryEntry:
     use_1m_context: bool = False
     include_in_listing: bool = True
 
-    def to_model_listing(self) -> Dict[str, int | str | bool]:
-        data: Dict[str, int | str | bool] = {
+    def to_model_listing(self) -> Dict[str, Any]:
+        data: Dict[str, Any] = {
             "id": self.openai_id,
             "object": "model",
             "created": self.created,
@@ -49,6 +49,11 @@ class ModelRegistryEntry:
             data["reasoning_budget"] = self.reasoning_budget or REASONING_BUDGET_MAP.get(self.reasoning_level)
         if self.supports_vision:
             data["supports_vision"] = True
+            # Add capabilities object for tools like Cursor that check this format
+            data["capabilities"] = {
+                "vision": True,
+                "function_calling": True
+            }
         return data
 
 
