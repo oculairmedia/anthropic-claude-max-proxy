@@ -17,7 +17,7 @@ from anthropic import (
     stream_anthropic_response,
 )
 from anthropic.thinking_keywords import process_thinking_keywords
-from openai_compat import ensure_thinking_prefix
+from proxy.thinking_storage import inject_thinking_blocks
 from models.resolution import resolve_model_metadata
 from models.reasoning import REASONING_BUDGET_MAP
 from oauth import OAuthManager
@@ -95,9 +95,9 @@ async def anthropic_messages(request: AnthropicMessageRequest, raw_request: Requ
             anthropic_request["max_tokens"] = required_total
             logger.debug(f"[{request_id}] Increased max_tokens to {required_total} (thinking: {thinking_budget} + response: {min_response_tokens})")
 
-        # Ensure all assistant messages have thinking blocks for multi-turn conversations
-        anthropic_request["messages"] = ensure_thinking_prefix(anthropic_request["messages"])
-        logger.debug(f"[{request_id}] Ensured thinking prefix on all assistant messages")
+        # Inject stored thinking blocks from previous responses
+        anthropic_request["messages"] = inject_thinking_blocks(anthropic_request["messages"])
+        logger.debug(f"[{request_id}] Injected stored thinking blocks if available")
 
     # Sanitize request for Anthropic API constraints
     anthropic_request = sanitize_anthropic_request(anthropic_request)
