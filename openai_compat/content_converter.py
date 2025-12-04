@@ -184,8 +184,13 @@ def convert_anthropic_content_to_openai(content: List[Dict[str, Any]]) -> tuple[
     return text_content, tool_calls_result, reasoning_content, thinking_blocks_result
 
 
-def _ensure_thinking_prefix(messages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """Ensure every assistant message begins with a thinking block when reasoning is enabled."""
+def ensure_thinking_prefix(messages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Ensure every assistant message begins with a thinking block when reasoning is enabled.
+
+    When thinking is enabled, Anthropic requires all assistant messages to start with
+    a thinking block. For past messages that don't have one, we use redacted_thinking
+    since we cannot forge signed thinking blocks.
+    """
     updated_messages: List[Dict[str, Any]] = []
 
     for message in messages:
@@ -197,24 +202,37 @@ def _ensure_thinking_prefix(messages: List[Dict[str, Any]]) -> List[Dict[str, An
         content = new_message.get("content")
 
         if isinstance(content, str):
+            # String content - wrap with redacted thinking block with data field
             blocks: List[Dict[str, Any]] = []
-            blocks.append({"type": "thinking", "thinking": ""})
+            blocks.append({"type": "redacted_thinking", "data": ""})
             if content:
                 blocks.append({"type": "text", "text": content})
             new_message["content"] = blocks
+
+        elif isinstance(content, list) and content:
+            # Check if first block is already thinking
+            first_block = content[0] if content else None
+            if first_block and isinstance(first_block, dict):
+                first_type = first_block.get("type")
+
+                if first_type in ("thinking", "redacted_thinking"):
+                    # Already has thinking/redacted_thinking block at start - keep as is
+                    new_message["content"] = content
+                else:
+                    # Need to prepend redacted_thinking block with data field
+                    # This includes cases where first block is tool_use
+                    new_content: List[Dict[str, Any]] = [{"type": "redacted_thinking", "data": ""}]
+                    new_content.extend(content)
+                    new_message["content"] = new_content
         elif isinstance(content, list):
-            if content and isinstance(content[0], dict) and content[0].get("type") in ("thinking", "redacted_thinking"):
-                new_message["content"] = content
-            else:
-                new_content: List[Dict[str, Any]] = [{"type": "thinking", "thinking": ""}]
-                for block in content:
-                    new_content.append(block)
-                new_message["content"] = new_content
+            # Empty list - add redacted thinking block with data field
+            new_message["content"] = [{"type": "redacted_thinking", "data": ""}]
         elif isinstance(content, dict):
-            # Rare case: single dict, wrap it
-            new_message["content"] = [{"type": "thinking", "thinking": ""}, content]
+            # Single dict (rare) - wrap with redacted thinking block first
+            new_message["content"] = [{"type": "redacted_thinking", "data": ""}, content]
         else:
-            new_message["content"] = [{"type": "thinking", "thinking": ""}]
+            # Fallback - just add redacted thinking block with data field
+            new_message["content"] = [{"type": "redacted_thinking", "data": ""}]
 
         updated_messages.append(new_message)
 

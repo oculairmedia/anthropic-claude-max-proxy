@@ -10,6 +10,8 @@ from anthropic import (
     inject_claude_code_system_message,
     add_prompt_caching,
 )
+from anthropic.thinking_keywords import process_thinking_keywords
+from proxy.thinking_storage import inject_thinking_blocks
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +38,37 @@ def prepare_anthropic_request(
     else:
         anthropic_request = openai_request.copy()
 
+    # Process thinking keywords in messages (detect, strip, and get config)
+    messages = anthropic_request.get("messages", [])
+    processed_messages, thinking_config = process_thinking_keywords(messages)
+
+    # Check if this is a tool use continuation (assistant message with tool_use)
+    has_tool_use_in_assistant = False
+    for msg in messages:
+        if msg.get("role") == "assistant":
+            content = msg.get("content", [])
+            if isinstance(content, list):
+                for block in content:
+                    if isinstance(block, dict) and block.get("type") == "tool_use":
+                        has_tool_use_in_assistant = True
+                        break
+
+    if thinking_config:
+        anthropic_request["messages"] = processed_messages
+        # Only set thinking if not already configured AND not in tool use continuation
+        if not anthropic_request.get("thinking") and not has_tool_use_in_assistant:
+            anthropic_request["thinking"] = thinking_config
+            logger.info(f"[{request_id}] Injected thinking config from keyword: {thinking_config}")
+        elif has_tool_use_in_assistant:
+            logger.info(f"[{request_id}] Skipping thinking injection due to tool use continuation")
+        else:
+            # Update budget if keyword specifies higher budget
+            existing_budget = anthropic_request["thinking"].get("budget_tokens", 0)
+            keyword_budget = thinking_config.get("budget_tokens", 0)
+            if keyword_budget > existing_budget:
+                anthropic_request["thinking"]["budget_tokens"] = keyword_budget
+                logger.info(f"[{request_id}] Updated thinking budget from {existing_budget} to {keyword_budget}")
+
     # Ensure max_tokens is sufficient if thinking is enabled
     thinking = anthropic_request.get("thinking")
     if thinking and thinking.get("type") == "enabled":
@@ -48,6 +81,10 @@ def prepare_anthropic_request(
                 f"[{request_id}] Increased max_tokens to {required_total} "
                 f"(thinking: {thinking_budget} + response: {min_response_tokens})"
             )
+
+        # Inject stored thinking blocks from previous responses
+        anthropic_request["messages"] = inject_thinking_blocks(anthropic_request["messages"])
+        logger.debug(f"[{request_id}] Injected stored thinking blocks if available")
 
     # Sanitize request for Anthropic API constraints
     anthropic_request = sanitize_anthropic_request(anthropic_request)

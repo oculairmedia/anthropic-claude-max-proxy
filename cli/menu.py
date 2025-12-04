@@ -11,7 +11,7 @@ def clear_screen(console):
 def display_header(console):
     """Display the application header"""
     console.print("=" * 50)
-    console.print("    LLM Subscription Proxy", style="bold")
+    console.print("    LLMux", style="bold")
     console.print("=" * 50)
 
 
@@ -52,7 +52,8 @@ def display_menu(storage, server_running: bool, bind_address: str, console):
 
     console.print(" 2. Authentication (Claude / ChatGPT)")
     console.print(" 3. Show Token Status")
-    console.print(" 4. Exit")
+    console.print(" 4. API Key Management")
+    console.print(" 5. Exit")
     console.print("=" * 50)
 
 
@@ -86,4 +87,25 @@ def display_provider_auth_menu(provider: str, console):
         console.print(" 6. Back to Authentication Menu")
     else:
         console.print(" 5. Back to Authentication Menu")
+    console.print("=" * 50)
+
+
+def display_api_keys_menu(key_count: int, console):
+    """Display API key management submenu
+
+    Args:
+        key_count: Number of stored API keys
+        console: Rich console for output
+    """
+    console.print("\n" + "=" * 50)
+    console.print("    API Key Management", style="bold")
+    console.print("=" * 50)
+    console.print(f" Active Keys: {key_count}")
+    console.print("-" * 50)
+    console.print(" 1. Generate New Key")
+    console.print(" 2. List Keys")
+    console.print(" 3. Delete Key")
+    console.print(" 4. Rename Key")
+    console.print(" 5. Copy Key Prefix")
+    console.print(" 6. Back to Main Menu")
     console.print("=" * 50)

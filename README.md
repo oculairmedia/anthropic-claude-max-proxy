@@ -135,6 +135,63 @@ python cli.py --bind 127.0.0.1
 - Select option 1 (Start Proxy Server)
 - Server runs at `http://0.0.0.0:8081` (default, listens on all interfaces)
 
+## Running as a Systemd Service
+
+For production deployments, run the proxy as a systemd service for automatic startup and restarts.
+
+### Service Configuration
+
+The proxy is configured to run as a systemd service at `/etc/systemd/system/anthropic-claude-proxy.service`:
+
+```ini
+[Unit]
+Description=Anthropic Claude Max Proxy
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/stacks/anthropic-claude-max-proxy
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/usr/bin/python3 cli.py --headless
+Restart=always
+RestartSec=10
+StandardOutput=append:/opt/stacks/anthropic-claude-max-proxy/proxy.log
+StandardError=append:/opt/stacks/anthropic-claude-max-proxy/proxy.log
+
+[Install]
+WantedBy=multi-user.target
+```
+
+### Service Management
+
+```bash
+# Enable service to start on boot
+systemctl enable anthropic-claude-proxy.service
+
+# Start the service
+systemctl start anthropic-claude-proxy.service
+
+# Check status
+systemctl status anthropic-claude-proxy.service
+
+# View logs
+journalctl -u anthropic-claude-proxy.service -f
+
+# Restart service
+systemctl restart anthropic-claude-proxy.service
+
+# Stop service
+systemctl stop anthropic-claude-proxy.service
+```
+
+### Service Features
+
+- **Auto-start on boot**: Service starts automatically when system boots
+- **Auto-restart on failure**: Service restarts automatically if it crashes
+- **Centralized logging**: Logs to both systemd journal and `proxy.log`
+- **Graceful shutdown**: Handles SIGTERM for clean shutdowns
+
 ## Headless Mode
 
 The proxy supports headless (non-interactive) operation for CI/CD, Docker containers, and production deployments.

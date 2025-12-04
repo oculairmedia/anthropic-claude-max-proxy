@@ -7,3 +7,4 @@ python-multipart==0.0.17
 rich>=13.0.0
 prompt_toolkit>=3.0.0
 python-dotenv>=1.0.0
+pyperclip>=1.8.0

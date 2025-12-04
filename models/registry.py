@@ -1,6 +1,6 @@
 """Model registry for managing available models"""
 
-from typing import Dict, List
+from typing import Dict, List, Any
 import logging
 
 from .specifications import ModelRegistryEntry, BASE_MODELS
@@ -9,7 +9,7 @@ from .reasoning import REASONING_BUDGET_MAP
 logger = logging.getLogger(__name__)
 
 MODEL_REGISTRY: Dict[str, ModelRegistryEntry] = {}
-OPENAI_MODELS_LIST: List[Dict[str, int | str | bool]] = []
+OPENAI_MODELS_LIST: List[Dict[str, Any]] = []
 
 
 def _register_model(entry: ModelRegistryEntry) -> None:

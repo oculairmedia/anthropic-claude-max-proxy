@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, Optional, List
+from typing import Dict, Optional, List, Any
 
 from .reasoning import REASONING_BUDGET_MAP
 
@@ -35,8 +35,8 @@ class ModelRegistryEntry:
     use_1m_context: bool = False
     include_in_listing: bool = True
 
-    def to_model_listing(self) -> Dict[str, int | str | bool]:
-        data: Dict[str, int | str | bool] = {
+    def to_model_listing(self) -> Dict[str, Any]:
+        data: Dict[str, Any] = {
             "id": self.openai_id,
             "object": "model",
             "type": "model",  # Required by Letta's AnthropicProvider
@@ -50,10 +50,23 @@ class ModelRegistryEntry:
             data["reasoning_budget"] = self.reasoning_budget or REASONING_BUDGET_MAP.get(self.reasoning_level)
         if self.supports_vision:
             data["supports_vision"] = True
+            # Add capabilities object for tools like Cursor that check this format
+            data["capabilities"] = {
+                "vision": True,
+                "function_calling": True
+            }
         return data
 
 
 BASE_MODELS: List[BaseModelSpec] = [
+    BaseModelSpec(
+        openai_id="opus-4-5",
+        anthropic_id="claude-opus-4-5-20251101",
+        created=1730419200,  # November 1, 2025
+        owned_by="anthropic",
+        context_length=200_000,
+        max_completion_tokens=65_536,  # 64K per official docs
+    ),
     BaseModelSpec(
         openai_id="sonnet-4-5",
         anthropic_id="claude-sonnet-4-5-20250929",

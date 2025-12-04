@@ -24,6 +24,7 @@ from ..handlers import (
     handle_custom_provider_request,
     handle_custom_provider_stream,
 )
+from proxy.thinking_storage import store_thinking_blocks
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -382,6 +383,10 @@ async def openai_chat_completions(request: OpenAIChatCompletionRequest, raw_requ
 
             # Convert Anthropic response to OpenAI format
             anthropic_response = response.json()
+
+            # Store thinking blocks from the response for future requests
+            store_thinking_blocks(anthropic_request.get("messages", []), anthropic_response)
+
             openai_response = convert_anthropic_response_to_openai(anthropic_response, request.model)
 
             final_elapsed_ms = int((time.time() - start_time) * 1000)

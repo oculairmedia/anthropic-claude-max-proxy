@@ -5,6 +5,7 @@ import threading
 from typing import Optional
 from rich.prompt import Prompt
 from utils.storage import TokenStorage
+from utils.api_key_storage import APIKeyStorage
 from oauth import OAuthManager
 from auth_cli import CLIAuthFlow
 from chatgpt_oauth import ChatGPTOAuthManager, ChatGPTTokenStorage
@@ -16,7 +17,8 @@ from cli.menu import (
     display_header,
     display_menu,
     display_auth_menu,
-    display_provider_auth_menu
+    display_provider_auth_menu,
+    display_api_keys_menu
 )
 from cli.status_display import show_token_status
 from cli.auth_handlers import (
@@ -30,6 +32,13 @@ from cli.auth_handlers import (
 )
 from cli.server_handlers import start_proxy_server, stop_proxy_server
 from cli.headless import run_headless
+from cli.api_key_handlers import (
+    generate_api_key,
+    list_api_keys,
+    delete_api_key,
+    rename_api_key,
+    copy_key_prefix,
+)
 
 
 class AnthropicProxyCLI:
@@ -48,6 +57,9 @@ class AnthropicProxyCLI:
         self.storage = TokenStorage()
         self.oauth = OAuthManager()
         self.auth_flow = CLIAuthFlow()
+
+        # API Keys
+        self.api_key_storage = APIKeyStorage()
 
         # ChatGPT
         self.chatgpt_storage = ChatGPTTokenStorage()
@@ -90,7 +102,7 @@ class AnthropicProxyCLI:
             display_header(self.console)
             display_menu(self.storage, self.server_running, self.bind_address, self.console)
 
-            choice = Prompt.ask("Select option [1-4]", choices=["1", "2", "3", "4"])
+            choice = Prompt.ask("Select option [1-5]", choices=["1", "2", "3", "4", "5"])
 
             # Log user menu choice for debugging
             if self.debug and hasattr(__main__, '_proxy_debug_logger'):
@@ -112,6 +124,8 @@ class AnthropicProxyCLI:
             elif choice == "3":
                 self._show_all_token_status()
             elif choice == "4":
+                self._handle_api_keys_menu()
+            elif choice == "5":
                 if self.server_running:
                     self.console.print("Stopping server before exit...")
                     self.server_running = stop_proxy_server(
@@ -182,6 +196,28 @@ class AnthropicProxyCLI:
                 logout_chatgpt(self.chatgpt_storage, self.console, self.debug)
             elif choice == "5":
                 break  # Back to auth menu
+
+    def _handle_api_keys_menu(self):
+        """Handle API key management submenu"""
+        while True:
+            clear_screen(self.console)
+            display_header(self.console)
+            display_api_keys_menu(self.api_key_storage.get_key_count(), self.console)
+
+            choice = Prompt.ask("Select option [1-6]", choices=["1", "2", "3", "4", "5", "6"])
+
+            if choice == "1":
+                generate_api_key(self.api_key_storage, self.console, self.debug)
+            elif choice == "2":
+                list_api_keys(self.api_key_storage, self.console, self.debug)
+            elif choice == "3":
+                delete_api_key(self.api_key_storage, self.console, self.debug)
+            elif choice == "4":
+                rename_api_key(self.api_key_storage, self.console, self.debug)
+            elif choice == "5":
+                copy_key_prefix(self.api_key_storage, self.console, self.debug)
+            elif choice == "6":
+                break  # Back to main menu
 
     def _show_all_token_status(self):
         """Show token status for all providers"""

@@ -7,4 +7,5 @@ REASONING_BUDGET_MAP: Dict[str, int] = {
     "low": 8000,
     "medium": 16000,
     "high": 32000,
+    "ultrathink": 32000,  # Max budget for ultrathink keyword
 }

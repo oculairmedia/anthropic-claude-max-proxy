@@ -5,6 +5,7 @@ import logging
 from fastapi import FastAPI
 
 from .middleware import log_requests_middleware
+from .api_key_middleware import APIKeyMiddleware
 from .endpoints import (
     health_router,
     models_router,
@@ -17,10 +18,11 @@ from .endpoints import (
 logger = logging.getLogger(__name__)
 
 # Create FastAPI app
-app = FastAPI(title="Anthropic Claude Max Proxy", version="1.0.0")
+app = FastAPI(title="LLMux", version="1.0.0")
 
-# Add middleware
+# Add middleware (order matters: last added executes first on request)
 app.middleware("http")(log_requests_middleware)
+app.add_middleware(APIKeyMiddleware)  # API key validation runs first
 
 # Register routers
 app.include_router(health_router)
