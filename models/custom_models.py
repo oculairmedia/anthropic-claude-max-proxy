@@ -127,6 +127,26 @@ def _load_chatgpt_models() -> None:
             "default_instructions": CHATGPT_GPT5_CODEX_INSTRUCTIONS,
         },
         {
+            "id": "gpt52",
+            "openai_id": "gpt-5.2",
+            "owned_by": "openai-chatgpt",
+            "context_length": 400000,
+            "max_completion_tokens": 128000,
+            "supports_reasoning": True,
+            "supports_vision": True,
+            "default_instructions": CHATGPT_BASE_INSTRUCTIONS,
+        },
+        {
+            "id": "gpt52codex",
+            "openai_id": "gpt-5.2-codex",
+            "owned_by": "openai-chatgpt",
+            "context_length": 400000,
+            "max_completion_tokens": 128000,
+            "supports_reasoning": True,
+            "supports_vision": True,
+            "default_instructions": CHATGPT_GPT5_CODEX_INSTRUCTIONS,
+        },
+        {
             "id": "codexmini",
             "openai_id": "codex-mini-latest",  # Actual OpenAI model ID (hidden)
             "owned_by": "openai-chatgpt",

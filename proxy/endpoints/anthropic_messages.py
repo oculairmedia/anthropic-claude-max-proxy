@@ -145,13 +145,24 @@ async def anthropic_messages(request: AnthropicMessageRequest, raw_request: Requ
 
     # Always include client-provided beta headers
     if client_beta_headers:
-        client_betas = [beta.strip() for beta in client_beta_headers.split(",")]
+        # Handle both string and list types (headers can be passed as either)
+        if isinstance(client_beta_headers, list):
+            # Already a list, flatten any comma-separated values within
+            client_betas = []
+            for item in client_beta_headers:
+                client_betas.extend([beta.strip() for beta in str(item).split(",")])
+        else:
+            # String, split by comma
+            client_betas = [beta.strip() for beta in client_beta_headers.split(",")]
         # Combine required betas with client betas, preserving order and removing duplicates
         all_betas = required_betas + [beta for beta in client_betas if beta not in required_betas]
     else:
         all_betas = required_betas
 
-    logger.debug(f"[{request_id}] FINAL ANTHROPIC REQUEST HEADERS: authorization=Bearer *****, anthropic-beta={','.join(all_betas)}, User-Agent=Claude-Code/1.0.0")
+    # Convert to comma-separated string for passing to API client functions
+    all_betas_str = ",".join(all_betas)
+
+    logger.debug(f"[{request_id}] FINAL ANTHROPIC REQUEST HEADERS: authorization=Bearer *****, anthropic-beta={all_betas_str}, User-Agent=Claude-Code/1.0.0")
     logger.debug(f"[{request_id}] SYSTEM MESSAGE STRUCTURE: {json.dumps(anthropic_request.get('system', []), indent=2)}")
     logger.debug(f"[{request_id}] FULL REQUEST COMPARISON - Our request structure:")
     logger.debug(f"[{request_id}] - model: {anthropic_request.get('model')}")
@@ -183,7 +194,7 @@ async def anthropic_messages(request: AnthropicMessageRequest, raw_request: Requ
                         request_id,
                         anthropic_request,
                         access_token,
-                        all_betas,
+                        all_betas_str,
                         tracer=tracer,
                     ):
                         yield chunk
@@ -199,7 +210,7 @@ async def anthropic_messages(request: AnthropicMessageRequest, raw_request: Requ
         else:
             # Handle non-streaming response
             logger.debug(f"[{request_id}] Making non-streaming request")
-            response = await make_anthropic_request(anthropic_request, access_token, all_betas)
+            response = await make_anthropic_request(anthropic_request, access_token, all_betas_str)
 
             elapsed_ms = int((time.time() - start_time) * 1000)
             logger.info(f"[{request_id}] Anthropic request completed in {elapsed_ms}ms status={response.status_code}")
