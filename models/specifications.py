@@ -7,6 +7,21 @@ from typing import Dict, Optional, List, Any
 
 from .reasoning import REASONING_BUDGET_MAP
 
+# Opus 4.5 model ID (supports effort parameter)
+OPUS_4_5_MODEL_ID = "claude-opus-4-5-20251101"
+
+
+def is_opus_4_5_model(model_id: str) -> bool:
+    """Check if the model is Opus 4.5 (supports effort parameter).
+
+    Args:
+        model_id: The Anthropic model ID
+
+    Returns:
+        True if the model is Opus 4.5
+    """
+    return model_id == OPUS_4_5_MODEL_ID
+
 
 @dataclass(frozen=True)
 class BaseModelSpec:

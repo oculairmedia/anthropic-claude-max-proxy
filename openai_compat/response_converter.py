@@ -18,7 +18,10 @@ def map_stop_reason_to_finish_reason(stop_reason: Optional[str]) -> str:
         "end_turn": "stop",
         "max_tokens": "length",
         "stop_sequence": "stop",
-        "tool_use": "tool_calls"
+        "tool_use": "tool_calls",
+        "pause_turn": "stop",           # Paused long-running turn
+        "refusal": "content_filter",    # Content policy refusal
+        "model_context_window_exceeded": "length"  # Context window exceeded
     }
     return mapping.get(stop_reason, "stop")
 
@@ -78,37 +81,59 @@ def convert_anthropic_response_to_openai(anthropic_response: Dict[str, Any], mod
     # Map stop reason
     finish_reason = map_stop_reason_to_finish_reason(anthropic_response.get("stop_reason"))
 
-    # Calculate usage with reasoning tokens
+    # Calculate usage with full OpenAI-compatible details
+    # This enables AI tools like Cursor, Cline, and Roo Code to track usage properly
     usage_obj = anthropic_response.get("usage", {})
     prompt_tokens = usage_obj.get("input_tokens", 0)
     completion_tokens = usage_obj.get("output_tokens", 0)
 
-    usage = {
-        "prompt_tokens": prompt_tokens,
-        "completion_tokens": completion_tokens,
-        "total_tokens": prompt_tokens + completion_tokens
-    }
+    # Map Anthropic's cache fields to OpenAI's prompt_tokens_details
+    cached_tokens = usage_obj.get("cache_read_input_tokens", 0)
+    cache_creation_tokens = usage_obj.get("cache_creation_input_tokens", 0)
 
-    # Add reasoning tokens if thinking content exists
+    # Estimate reasoning tokens if thinking content exists
     # Note: Anthropic's output_tokens already includes thinking tokens
     # We report them separately in completion_tokens_details for transparency
+    reasoning_tokens = 0
     if reasoning_content:
         # Estimate reasoning tokens (4 characters per token is a rough estimate)
         # For more accuracy, could use tiktoken: len(tiktoken.get_encoding("cl100k_base").encode(reasoning_content))
         reasoning_tokens = len(reasoning_content) // 4
-
-        usage["completion_tokens_details"] = {
-            "reasoning_tokens": reasoning_tokens
-        }
-
         logger.debug(f"Extracted reasoning content: {len(reasoning_content)} chars, ~{reasoning_tokens} tokens")
 
+    usage = {
+        "prompt_tokens": prompt_tokens,
+        "completion_tokens": completion_tokens,
+        "total_tokens": prompt_tokens + completion_tokens,
+        "prompt_tokens_details": {
+            "cached_tokens": cached_tokens,
+            "cache_creation_tokens": cache_creation_tokens,
+            "audio_tokens": 0
+        },
+        "completion_tokens_details": {
+            "reasoning_tokens": reasoning_tokens,
+            "audio_tokens": 0,
+            "accepted_prediction_tokens": 0,
+            "rejected_prediction_tokens": 0
+        }
+    }
+
+    if cached_tokens > 0:
+        logger.debug(f"Cache hit: {cached_tokens} tokens read from cache")
+    if cache_creation_tokens > 0:
+        logger.debug(f"Cache write: {cache_creation_tokens} tokens written to cache")
+
     # Build OpenAI response
+    # Generate system_fingerprint from Anthropic message ID for compatibility
+    msg_id = anthropic_response.get('id', 'unknown')
+    system_fingerprint = f"fp_{msg_id.replace('msg_', '')[:12]}"
+
     openai_response = {
-        "id": f"chatcmpl-{anthropic_response.get('id', 'unknown').replace('msg_', '')}",
+        "id": f"chatcmpl-{msg_id.replace('msg_', '')}",
         "object": "chat.completion",
         "created": int(time.time()),
         "model": model,
+        "system_fingerprint": system_fingerprint,
         "choices": [
             {
                 "index": 0,
@@ -118,6 +143,11 @@ def convert_anthropic_response_to_openai(anthropic_response: Dict[str, Any], mod
         ],
         "usage": usage
     }
+
+    # Include service_tier if present in Anthropic response
+    service_tier = usage_obj.get("service_tier")
+    if service_tier:
+        openai_response["service_tier"] = service_tier
 
     logger.debug(f"[RESPONSE_CONVERSION] Final OpenAI response: {json.dumps(openai_response, indent=2)}")
     logger.debug("[RESPONSE_CONVERSION] ===== END RESPONSE CONVERSION =====")

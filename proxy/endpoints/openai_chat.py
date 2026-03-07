@@ -320,6 +320,12 @@ async def openai_chat_completions(request: OpenAIChatCompletionRequest, raw_requ
             # Handle streaming response
             logger.debug(f"[{request_id}] Initiating streaming request (OpenAI format)")
 
+            # Extract include_usage from stream_options
+            include_usage = False
+            if request.stream_options and request.stream_options.include_usage:
+                include_usage = True
+                logger.debug(f"[{request_id}] stream_options.include_usage=True, will include usage in final chunk")
+
             tracer = maybe_create_stream_tracer(
                 enabled=settings.STREAM_TRACE_ENABLED,
                 request_id=request_id,
@@ -338,6 +344,7 @@ async def openai_chat_completions(request: OpenAIChatCompletionRequest, raw_requ
                         client_beta_headers,
                         request.model,
                         tracer=tracer,
+                        include_usage=include_usage,
                     ):
                         yield chunk
                 finally:

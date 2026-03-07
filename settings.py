@@ -50,6 +50,10 @@ SCOPES = "org:create_api_key user:profile user:inference"
 THINKING_FORCE_ENABLED = config.get("THINKING_FORCE_ENABLED", False)
 THINKING_DEFAULT_BUDGET = config.get("THINKING_DEFAULT_BUDGET", 16000)
 
+# Prompt caching TTL configuration
+# Valid values: None (default ephemeral), "5m" (5 minutes), "1h" (1 hour)
+CACHE_TTL = config.get("CACHE_TTL", None)
+
 # Thinking parameters handled directly by clients (no custom variants)
 
 # Pure Anthropic proxy - native endpoint always enabled

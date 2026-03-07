@@ -48,6 +48,7 @@ async def create_openai_stream(
     client_beta_headers: Optional[str],
     model: str,
     tracer: Optional[StreamTracer] = None,
+    include_usage: bool = False,
 ) -> AsyncIterator[bytes]:
     """
     Create a streaming response in OpenAI format.
@@ -59,6 +60,7 @@ async def create_openai_stream(
         client_beta_headers: Beta feature headers from client
         model: Model name for OpenAI response
         tracer: Optional stream tracer for debugging
+        include_usage: If True, include usage in final chunk (OpenAI stream_options)
 
     Yields:
         SSE chunks in OpenAI format
@@ -78,5 +80,6 @@ async def create_openai_stream(
         model,
         request_id,
         tracer=tracer,
+        include_usage=include_usage,
     ):
         yield chunk

@@ -93,7 +93,7 @@ def convert_openai_request_to_anthropic(openai_request: Dict[str, Any]) -> Dict[
     # Handle tool_choice
     if "tool_choice" in openai_request:
         tool_choice = openai_request["tool_choice"]
-        logger.debug(f"[REQUEST_CONVERSION] Processing tool_choice: {json.dumps(tool_choice, indent=2)}")
+        logger.debug(f"[REQUEST_CONVERSION] Processing tool_choice: {json.dumps(tool_choice, indent=2) if isinstance(tool_choice, dict) else tool_choice}")
 
         if tool_choice == "none":
             # Don't include tools
@@ -103,26 +103,67 @@ def convert_openai_request_to_anthropic(openai_request: Dict[str, Any]) -> Dict[
             # Default Anthropic behavior
             logger.debug("[REQUEST_CONVERSION] tool_choice='auto' - using default Anthropic behavior")
             pass
+        elif tool_choice == "any":
+            # Force model to use at least one tool
+            logger.debug("[REQUEST_CONVERSION] tool_choice='any' - forcing tool use")
+            anthropic_request["tool_choice"] = {"type": "any"}
         elif isinstance(tool_choice, dict):
             # Handle dict format (Cursor sends {'type': 'auto'})
             choice_type = tool_choice.get("type")
-            logger.debug(f"[REQUEST_CONVERSION] tool_choice is dict with type='{choice_type}'")
+            disable_parallel = tool_choice.get("disable_parallel_tool_use", False)
+            logger.debug(f"[REQUEST_CONVERSION] tool_choice is dict with type='{choice_type}', disable_parallel={disable_parallel}")
 
             if choice_type == "auto" or choice_type is None:
-                # Auto mode - default Anthropic behavior
-                logger.debug("[REQUEST_CONVERSION] tool_choice type is 'auto' or None - using default behavior")
-                pass
+                # Auto mode - may have disable_parallel_tool_use option
+                if disable_parallel:
+                    anthropic_request["tool_choice"] = {
+                        "type": "auto",
+                        "disable_parallel_tool_use": True
+                    }
+                    logger.debug("[REQUEST_CONVERSION] tool_choice='auto' with disable_parallel_tool_use")
+                else:
+                    logger.debug("[REQUEST_CONVERSION] tool_choice type is 'auto' or None - using default behavior")
+
+            elif choice_type == "any":
+                # Force model to use at least one tool
+                anthropic_tool_choice = {"type": "any"}
+                if disable_parallel:
+                    anthropic_tool_choice["disable_parallel_tool_use"] = True
+                anthropic_request["tool_choice"] = anthropic_tool_choice
+                logger.debug(f"[REQUEST_CONVERSION] tool_choice='any' with disable_parallel={disable_parallel}")
+
             elif choice_type == "function":
-                # Specific tool
+                # Specific tool (OpenAI format)
                 function_name = tool_choice.get("function", {}).get("name")
                 logger.debug(f"[REQUEST_CONVERSION] tool_choice type is 'function' with name='{function_name}'")
 
                 if function_name:
-                    anthropic_request["tool_choice"] = {
+                    anthropic_tool_choice = {
                         "type": "tool",
                         "name": function_name
                     }
+                    if disable_parallel:
+                        anthropic_tool_choice["disable_parallel_tool_use"] = True
+                    anthropic_request["tool_choice"] = anthropic_tool_choice
                     logger.debug(f"[REQUEST_CONVERSION] Set Anthropic tool_choice to force tool: {function_name}")
+
+            elif choice_type == "tool":
+                # Anthropic format passthrough
+                tool_name = tool_choice.get("name")
+                if tool_name:
+                    anthropic_tool_choice = {
+                        "type": "tool",
+                        "name": tool_name
+                    }
+                    if disable_parallel:
+                        anthropic_tool_choice["disable_parallel_tool_use"] = True
+                    anthropic_request["tool_choice"] = anthropic_tool_choice
+                    logger.debug(f"[REQUEST_CONVERSION] Anthropic tool_choice passthrough: {tool_name}")
+
+            elif choice_type == "none":
+                # None type in dict format
+                logger.debug("[REQUEST_CONVERSION] tool_choice type='none' - removing tools")
+                anthropic_request.pop("tools", None)
 
     # Handle function_call (legacy)
     if "function_call" in openai_request:

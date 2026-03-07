@@ -21,6 +21,7 @@ async def convert_anthropic_stream_to_openai(
     model: str,
     request_id: str,
     tracer: Optional["StreamTracer"] = None,
+    include_usage: bool = False,
 ) -> AsyncIterator[str]:
     """
     Convert Anthropic SSE stream to OpenAI chat completion stream format.
@@ -29,12 +30,15 @@ async def convert_anthropic_stream_to_openai(
         anthropic_stream: Anthropic SSE stream
         model: Model name
         request_id: Request ID for logging
+        tracer: Optional stream tracer for debugging
+        include_usage: If True, include usage in final chunk (OpenAI stream_options)
 
     Yields:
         OpenAI-formatted SSE chunks
     """
     completion_id = f"chatcmpl-{int(time.time())}"
     created = int(time.time())
+    system_fingerprint = f"fp_{completion_id[-12:]}"
 
     parser = SSEParser()
     converted_index = 0
@@ -43,6 +47,16 @@ async def convert_anthropic_stream_to_openai(
     tool_call_states: Dict[int, Dict[str, Any]] = {}
     next_tool_index = 0
     thinking_states: Dict[int, Dict[str, Any]] = {}
+
+    # Track usage from message_delta events (for stream_options.include_usage)
+    final_usage: Optional[Dict[str, Any]] = None
+
+    # Track cached tokens from message_start (Anthropic includes cache info there)
+    cached_tokens = 0
+    cache_creation_tokens = 0
+
+    # Track reasoning character count for estimating reasoning tokens
+    reasoning_char_count = 0
 
     if tracer:
         tracer.log_note("starting OpenAI stream conversion")
@@ -62,6 +76,7 @@ async def convert_anthropic_stream_to_openai(
             "object": "chat.completion.chunk",
             "created": created,
             "model": model,
+            "system_fingerprint": system_fingerprint,
             "choices": [
                 {
                     "index": 0,
@@ -105,11 +120,23 @@ async def convert_anthropic_stream_to_openai(
                     continue
 
                 if data_type == "message_start":
+                    # Capture cache info from message_start (Anthropic includes usage here)
+                    message = data.get("message", {})
+                    usage = message.get("usage", {})
+                    if usage:
+                        cached_tokens = usage.get("cache_read_input_tokens", 0)
+                        cache_creation_tokens = usage.get("cache_creation_input_tokens", 0)
+                        if cached_tokens > 0:
+                            logger.debug(f"[{request_id}] Cache hit from message_start: {cached_tokens} tokens")
+                        if cache_creation_tokens > 0:
+                            logger.debug(f"[{request_id}] Cache write from message_start: {cache_creation_tokens} tokens")
+
                     initial_chunk = {
                         "id": completion_id,
                         "object": "chat.completion.chunk",
                         "created": created,
                         "model": model,
+                        "system_fingerprint": system_fingerprint,
                         "choices": [
                             {
                                 "index": 0,
@@ -150,6 +177,7 @@ async def convert_anthropic_stream_to_openai(
                             "object": "chat.completion.chunk",
                             "created": created,
                             "model": model,
+                            "system_fingerprint": system_fingerprint,
                             "choices": [
                                 {
                                     "index": 0,
@@ -193,6 +221,51 @@ async def convert_anthropic_stream_to_openai(
                             }
                         continue
 
+                    if block_type == "server_tool_use":
+                        # Handle server-side tool use (e.g., web_search)
+                        sse_index = data.get("index")
+                        if sse_index is not None:
+                            logger.debug(f"[{request_id}] [STREAM_TOOL] Starting server_tool_use block at index {sse_index}")
+
+                            call_state = {
+                                "openai_index": next_tool_index,
+                                "id": content_block.get("id", ""),
+                                "name": content_block.get("name", ""),
+                                "arguments": json.dumps(content_block.get("input", {}))
+                            }
+                            tool_call_states[sse_index] = call_state
+                            next_tool_index += 1
+
+                            # Emit as regular tool call for OpenAI clients
+                            delta_chunk = {
+                                "id": completion_id,
+                                "object": "chat.completion.chunk",
+                                "created": created,
+                                "model": model,
+                                "system_fingerprint": system_fingerprint,
+                                "choices": [
+                                    {
+                                        "index": 0,
+                                        "delta": {
+                                            "tool_calls": [
+                                                {
+                                                    "index": call_state["openai_index"],
+                                                    "id": call_state["id"],
+                                                    "type": "function",
+                                                    "function": {
+                                                        "name": call_state["name"],
+                                                        "arguments": call_state["arguments"]
+                                                    }
+                                                }
+                                            ]
+                                        },
+                                        "finish_reason": None
+                                    }
+                                ]
+                            }
+                            yield emit(delta_chunk)
+                        continue
+
                 if data_type == "content_block_delta":
                     delta = data.get("delta", {}) or {}
                     delta_type = delta.get("type")
@@ -205,6 +278,7 @@ async def convert_anthropic_stream_to_openai(
                                 "object": "chat.completion.chunk",
                                 "created": created,
                                 "model": model,
+                                "system_fingerprint": system_fingerprint,
                                 "choices": [
                                     {
                                         "index": 0,
@@ -284,6 +358,8 @@ async def convert_anthropic_stream_to_openai(
                         )
                         if reasoning_text:
                             yield emit_reasoning(reasoning_text)
+                            # Track reasoning character count for token estimation
+                            reasoning_char_count += len(reasoning_text)
                             # Accumulate full thinking text for later reattachment
                             acc = current_thinking_blocks.get(sse_index)
                             if acc is not None:
@@ -305,6 +381,7 @@ async def convert_anthropic_stream_to_openai(
                                 "object": "chat.completion.chunk",
                                 "created": created,
                                 "model": model,
+                                "system_fingerprint": system_fingerprint,
                                 "choices": [
                                     {
                                         "index": 0,
@@ -358,6 +435,39 @@ async def convert_anthropic_stream_to_openai(
                     delta = data.get("delta", {}) or {}
                     stop_reason = delta.get("stop_reason")
 
+                    # Capture usage from message_delta (Anthropic provides cumulative usage here)
+                    # Build full OpenAI-compatible usage object for AI tools like Cursor, Cline, Roo Code
+                    usage = data.get("usage", {})
+                    if usage:
+                        input_tokens = usage.get("input_tokens", 0)
+                        output_tokens = usage.get("output_tokens", 0)
+                        # Also check for cache info in message_delta (may be provided here too)
+                        if usage.get("cache_read_input_tokens"):
+                            cached_tokens = usage.get("cache_read_input_tokens", 0)
+                        if usage.get("cache_creation_input_tokens"):
+                            cache_creation_tokens = usage.get("cache_creation_input_tokens", 0)
+
+                        # Estimate reasoning tokens from accumulated character count
+                        reasoning_tokens = reasoning_char_count // 4 if reasoning_char_count > 0 else 0
+
+                        final_usage = {
+                            "prompt_tokens": input_tokens,
+                            "completion_tokens": output_tokens,
+                            "total_tokens": input_tokens + output_tokens,
+                            "prompt_tokens_details": {
+                                "cached_tokens": cached_tokens,
+                                "cache_creation_tokens": cache_creation_tokens,
+                                "audio_tokens": 0
+                            },
+                            "completion_tokens_details": {
+                                "reasoning_tokens": reasoning_tokens,
+                                "audio_tokens": 0,
+                                "accepted_prediction_tokens": 0,
+                                "rejected_prediction_tokens": 0
+                            }
+                        }
+                        logger.debug(f"[{request_id}] Captured usage from message_delta: {final_usage}")
+
                     if stop_reason:
                         finish_reason = map_stop_reason_to_finish_reason(stop_reason)
 
@@ -366,6 +476,7 @@ async def convert_anthropic_stream_to_openai(
                             "object": "chat.completion.chunk",
                             "created": created,
                             "model": model,
+                            "system_fingerprint": system_fingerprint,
                             "choices": [
                                 {
                                     "index": 0,
@@ -431,6 +542,22 @@ async def convert_anthropic_stream_to_openai(
         if tracer:
             tracer.log_error(f"conversion exception: {e}")
         yield emit(error_chunk)
+
+    # Emit usage chunk if requested via stream_options.include_usage
+    if include_usage and final_usage:
+        usage_chunk = {
+            "id": completion_id,
+            "object": "chat.completion.chunk",
+            "created": created,
+            "model": model,
+            "system_fingerprint": system_fingerprint,
+            "choices": [],
+            "usage": final_usage
+        }
+        if tracer:
+            tracer.log_note("emitting usage chunk")
+        yield emit(usage_chunk)
+        logger.debug(f"[{request_id}] Emitted usage chunk: {final_usage}")
 
     # Send [DONE] marker
     done_chunk = "data: [DONE]\n\n"

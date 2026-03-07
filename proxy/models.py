@@ -21,6 +21,16 @@ class OpenAIToolChoice(BaseModel):
     function: Optional[Dict[str, str]] = None
 
 
+class ResponseFormat(BaseModel):
+    """OpenAI response_format for JSON mode."""
+    type: str = "text"  # "text" or "json_object"
+
+
+class StreamOptions(BaseModel):
+    """OpenAI stream_options for including usage in streaming responses."""
+    include_usage: Optional[bool] = False
+
+
 class OpenAIChatCompletionRequest(BaseModel):
     model: str
     messages: List[Dict[str, Any]]
@@ -34,5 +44,8 @@ class OpenAIChatCompletionRequest(BaseModel):
     functions: Optional[List[Dict[str, Any]]] = None  # Legacy
     function_call: Optional[Any] = None  # Legacy
     reasoning_effort: Optional[str] = None  # "low", "medium", "high" - maps to Anthropic thinking budget
+    response_format: Optional[ResponseFormat] = None  # JSON mode support
+    seed: Optional[int] = None  # Deterministic sampling (best-effort)
+    stream_options: Optional[StreamOptions] = None  # Include usage in streaming responses
 
 

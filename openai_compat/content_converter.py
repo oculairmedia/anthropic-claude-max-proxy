@@ -103,6 +103,31 @@ def convert_openai_content_to_anthropic(openai_content: List[Dict[str, Any]]) ->
                     }
                 })
 
+        elif item_type == "document":
+            # Pass through document blocks (PDF, plaintext, URL, content)
+            document_block = {
+                "type": "document",
+                "source": item.get("source", {})
+            }
+
+            # Preserve optional fields if present
+            if "cache_control" in item:
+                document_block["cache_control"] = item["cache_control"]
+            if "citations" in item:
+                document_block["citations"] = item["citations"]
+            if "context" in item:
+                document_block["context"] = item["context"]
+            if "title" in item:
+                document_block["title"] = item["title"]
+
+            anthropic_content.append(document_block)
+
+        else:
+            # Unknown block type - pass through as-is for forward compatibility
+            if item_type:
+                logger.debug(f"[CONTENT_CONVERSION] Passing through unknown block type: {item_type}")
+                anthropic_content.append(item)
+
     return anthropic_content
 
 
@@ -132,7 +157,10 @@ def convert_anthropic_content_to_openai(content: List[Dict[str, Any]]) -> tuple[
 
         if block_type == "text":
             text = block.get("text", "")
+            citations = block.get("citations")
             logger.debug(f"[RESPONSE_CONVERSION]   - Text block: {text[:100]}...")
+            if citations:
+                logger.debug(f"[RESPONSE_CONVERSION]   - Text block has {len(citations)} citations")
             text_parts.append(text)
 
         elif block_type == "tool_use":
@@ -170,6 +198,54 @@ def convert_anthropic_content_to_openai(content: List[Dict[str, Any]]) -> tuple[
             logger.debug("[RESPONSE_CONVERSION]   - Redacted thinking block")
             thinking_blocks.append(block)
             # Note: redacted_thinking doesn't have text, so we don't add to reasoning_parts
+
+        elif block_type == "server_tool_use":
+            # Server-side tool use (e.g., web_search) - convert to OpenAI tool_call format
+            server_tool_id = block.get("id", "")
+            server_tool_name = block.get("name", "")
+            server_tool_input = block.get("input", {})
+
+            logger.debug(f"[RESPONSE_CONVERSION]   - Server tool use block: {server_tool_name}")
+
+            openai_tool_call = {
+                "id": server_tool_id,
+                "type": "function",
+                "function": {
+                    "name": server_tool_name,
+                    "arguments": json.dumps(server_tool_input)
+                }
+            }
+            tool_calls.append(openai_tool_call)
+
+        elif block_type == "web_search_tool_result":
+            # Web search results - convert content to text for OpenAI clients
+            search_content = block.get("content", [])
+            tool_use_id = block.get("tool_use_id", "")
+
+            logger.debug(f"[RESPONSE_CONVERSION]   - Web search tool result for {tool_use_id}")
+
+            if isinstance(search_content, list):
+                # List of WebSearchResultBlock
+                result_texts = []
+                for result in search_content:
+                    if isinstance(result, dict):
+                        title = result.get("title", "")
+                        url = result.get("url", "")
+                        snippet = result.get("snippet", result.get("content", ""))
+                        if title or url:
+                            result_texts.append(f"[{title}]({url})\n{snippet}")
+                        else:
+                            result_texts.append(str(result))
+                if result_texts:
+                    text_parts.append("\n\n".join(result_texts))
+            elif isinstance(search_content, dict) and search_content.get("type") == "error":
+                # WebSearchToolResultError
+                error_msg = search_content.get("message", "Web search error")
+                text_parts.append(f"[Web search error: {error_msg}]")
+
+        else:
+            # Unknown block type - log and skip
+            logger.debug(f"[RESPONSE_CONVERSION]   - Unknown block type (skipping): {block_type}")
 
     text_content = "".join(text_parts) if text_parts else None
     tool_calls_result = tool_calls if tool_calls else []

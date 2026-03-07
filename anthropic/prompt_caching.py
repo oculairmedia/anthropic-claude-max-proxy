@@ -1,9 +1,27 @@
 """Prompt caching functionality for Anthropic API"""
 
 import logging
-from typing import Dict, Any
+from typing import Dict, Any, Optional, Literal
 
 logger = logging.getLogger(__name__)
+
+# Valid TTL values per Anthropic API
+CacheTTL = Literal["5m", "1h"]
+
+
+def _make_cache_control(ttl: Optional[CacheTTL] = None) -> Dict[str, Any]:
+    """Create cache_control dict with optional TTL
+
+    Args:
+        ttl: Optional TTL value ("5m" for 5 minutes, "1h" for 1 hour)
+
+    Returns:
+        Cache control dictionary
+    """
+    cache_control: Dict[str, Any] = {'type': 'ephemeral'}
+    if ttl and ttl in ("5m", "1h"):
+        cache_control['ttl'] = ttl
+    return cache_control
 
 
 def count_existing_cache_controls(request_data: Dict[str, Any]) -> int:
@@ -45,7 +63,7 @@ def count_existing_cache_controls(request_data: Dict[str, Any]) -> int:
     return count
 
 
-def add_prompt_caching(request_data: Dict[str, Any]) -> Dict[str, Any]:
+def add_prompt_caching(request_data: Dict[str, Any], ttl: Optional[CacheTTL] = None) -> Dict[str, Any]:
     """Add prompt caching breakpoints following Anthropic's best practices
 
     Strategy:
@@ -60,6 +78,7 @@ def add_prompt_caching(request_data: Dict[str, Any]) -> Dict[str, Any]:
 
     Args:
         request_data: Request data dictionary
+        ttl: Optional TTL for cache entries ("5m" for 5 minutes, "1h" for 1 hour)
 
     Returns:
         Modified request data with prompt caching added
@@ -86,7 +105,7 @@ def add_prompt_caching(request_data: Dict[str, Any]) -> Dict[str, Any]:
             # Mark the last tool for caching
             last_tool = tools[-1]
             if isinstance(last_tool, dict) and 'cache_control' not in last_tool:
-                last_tool['cache_control'] = {'type': 'ephemeral'}
+                last_tool['cache_control'] = _make_cache_control(ttl)
                 cache_added_count += 1
                 remaining_slots -= 1
                 logger.debug(f"Added cache_control to tools (last tool: {last_tool.get('name', 'unknown')})")
@@ -100,7 +119,7 @@ def add_prompt_caching(request_data: Dict[str, Any]) -> Dict[str, Any]:
             # Mark the last system block for caching
             last_block = system[-1]
             if isinstance(last_block, dict) and 'cache_control' not in last_block:
-                last_block['cache_control'] = {'type': 'ephemeral'}
+                last_block['cache_control'] = _make_cache_control(ttl)
                 cache_added_count += 1
                 remaining_slots -= 1
                 logger.debug("Added cache_control to system message (last block)")
@@ -110,7 +129,7 @@ def add_prompt_caching(request_data: Dict[str, Any]) -> Dict[str, Any]:
                 {
                     'type': 'text',
                     'text': system,
-                    'cache_control': {'type': 'ephemeral'}
+                    'cache_control': _make_cache_control(ttl)
                 }
             ]
             cache_added_count += 1
@@ -139,7 +158,7 @@ def add_prompt_caching(request_data: Dict[str, Any]) -> Dict[str, Any]:
                 # Mark the last content block for caching
                 last_block = content[-1]
                 if isinstance(last_block, dict) and 'cache_control' not in last_block:
-                    last_block['cache_control'] = {'type': 'ephemeral'}
+                    last_block['cache_control'] = _make_cache_control(ttl)
                     cache_added_count += 1
                     remaining_slots -= 1
             elif isinstance(content, str):
@@ -148,7 +167,7 @@ def add_prompt_caching(request_data: Dict[str, Any]) -> Dict[str, Any]:
                     {
                         'type': 'text',
                         'text': content,
-                        'cache_control': {'type': 'ephemeral'}
+                        'cache_control': _make_cache_control(ttl)
                     }
                 ]
                 cache_added_count += 1

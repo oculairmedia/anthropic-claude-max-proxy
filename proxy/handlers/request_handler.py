@@ -12,6 +12,7 @@ from anthropic import (
 )
 from anthropic.thinking_keywords import process_thinking_keywords
 from proxy.thinking_storage import inject_thinking_blocks
+import settings
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +38,29 @@ def prepare_anthropic_request(
         anthropic_request = convert_openai_request_to_anthropic(openai_request)
     else:
         anthropic_request = openai_request.copy()
+
+    # Handle response_format (JSON mode) - inject instruction into system prompt
+    response_format = openai_request.get("response_format")
+    if response_format and response_format.get("type") == "json_object":
+        logger.info(f"[{request_id}] JSON mode enabled via response_format")
+        system_blocks = anthropic_request.get("system", [])
+        if not isinstance(system_blocks, list):
+            system_blocks = [{"type": "text", "text": system_blocks}] if system_blocks else []
+        json_instruction = {
+            "type": "text",
+            "text": "IMPORTANT: You must respond with valid JSON only. No markdown code fences, no explanations, just pure JSON."
+        }
+        system_blocks.append(json_instruction)
+        anthropic_request["system"] = system_blocks
+
+    # Handle seed parameter - set temperature to 0 for best-effort determinism
+    seed = openai_request.get("seed")
+    if seed is not None:
+        logger.debug(f"[{request_id}] seed={seed} (note: Anthropic doesn't guarantee determinism)")
+        # Only set temperature to 0 if not already specified
+        if anthropic_request.get("temperature") is None:
+            anthropic_request["temperature"] = 0
+            logger.debug(f"[{request_id}] Set temperature=0 for deterministic behavior")
 
     # Process thinking keywords in messages (detect, strip, and get config)
     messages = anthropic_request.get("messages", [])
@@ -93,6 +117,6 @@ def prepare_anthropic_request(
     anthropic_request = inject_claude_code_system_message(anthropic_request)
 
     # Add cache_control to message content blocks for optimal caching
-    anthropic_request = add_prompt_caching(anthropic_request)
+    anthropic_request = add_prompt_caching(anthropic_request, ttl=settings.CACHE_TTL)
 
     return anthropic_request

@@ -49,6 +49,13 @@ config.json
 !models.example.json
 !package.json
 !package-lock.json
+!tsconfig.json
+!tsconfig.node.json
+!components.json
+
+# Web UI
+web/node_modules/
+web/dist/
 
 # Environment variables
 .env
@@ -64,3 +71,4 @@ dev-code
 
 *.log
 .spec-workflow
+.cursor

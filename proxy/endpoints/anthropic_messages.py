@@ -17,6 +17,7 @@ from anthropic import (
     stream_anthropic_response,
 )
 from anthropic.thinking_keywords import process_thinking_keywords
+from anthropic.beta_headers import build_beta_headers
 from proxy.thinking_storage import inject_thinking_blocks
 from models.resolution import resolve_model_metadata
 from models.reasoning import REASONING_BUDGET_MAP
@@ -106,7 +107,7 @@ async def anthropic_messages(request: AnthropicMessageRequest, raw_request: Requ
     anthropic_request = inject_claude_code_system_message(anthropic_request)
 
     # Add cache_control to message content blocks for optimal caching
-    anthropic_request = add_prompt_caching(anthropic_request)
+    anthropic_request = add_prompt_caching(anthropic_request, ttl=settings.CACHE_TTL)
 
     # Enforce thinking budget for reasoning models
     if reasoning_level and reasoning_level in REASONING_BUDGET_MAP:
@@ -128,8 +129,16 @@ async def anthropic_messages(request: AnthropicMessageRequest, raw_request: Requ
                 anthropic_request["thinking"]["budget_tokens"] = required_budget
                 logger.debug(f"[{request_id}] Updated thinking budget from {existing_budget} to {required_budget} for reasoning level '{reasoning_level}'")
 
-    # Extract client beta headers
+    # Extract client beta headers and build consolidated beta header value
     client_beta_headers = headers_dict.get("anthropic-beta")
+    beta_header_value = build_beta_headers(
+        anthropic_request,
+        client_beta_headers=client_beta_headers,
+        request_id=request_id,
+        for_streaming=request.stream,
+        reasoning_level=reasoning_level,
+        use_1m_context=use_1m_context,
+    )
 
     # Start with required base betas
     required_betas = ["claude-code-20250219", "fine-grained-tool-streaming-2025-05-14"]
