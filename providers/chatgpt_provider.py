@@ -280,7 +280,13 @@ class ChatGPTProvider(BaseProvider):
                         if tracer:
                             tracer.log_error(f"ChatGPT error status={response.status_code} body={error_json}")
 
-                        error_event = f'data: {{"error": {{"message": "ChatGPT API error: {response.status_code}"}}}}\n\n'
+                        error_payload = {
+                            "error": {
+                                "message": f"ChatGPT API error: {response.status_code}",
+                                "upstream_body": error_json,
+                            }
+                        }
+                        error_event = f"data: {json.dumps(error_payload)}\n\n"
                         if tracer:
                             tracer.log_note("yielding synthetic error SSE event")
                         yield error_event

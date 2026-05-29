@@ -14,6 +14,8 @@ from starlette.responses import JSONResponse
 
 from utils.api_key_storage import APIKeyStorage
 
+from settings import DISABLE_API_KEY_AUTH
+
 logger = logging.getLogger(__name__)
 
 # Endpoints that don't require API key authentication
@@ -49,6 +51,10 @@ class APIKeyMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next):
         path = request.url.path
+
+        # Dev mode: skip all API key validation
+        if DISABLE_API_KEY_AUTH:
+            return await call_next(request)
 
         # Skip exempt paths
         if path in EXEMPT_PATHS:

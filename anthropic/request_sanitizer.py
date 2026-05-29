@@ -60,7 +60,26 @@ def sanitize_anthropic_request(request_data: Dict[str, Any]) -> Dict[str, Any]:
     if thinking is None:
         logger.debug("Removing null thinking parameter (Anthropic API doesn't accept null values)")
         sanitized.pop('thinking', None)
-    elif thinking and thinking.get('type') == 'enabled':
+    elif thinking and thinking.get('type') == 'adaptive':
+        # Downgrade newer client thinking shape so the API accepts it.
+        # Letta Code 0.25.x emits `thinking: {type: "adaptive", budget_tokens: N}`,
+        # which Anthropic's validator rejects with
+        # `thinking.adaptive.budget_tokens: Extra inputs are not permitted`.
+        # The supported shape is `{type: "enabled", budget_tokens: N}`. Rewrite
+        # in place; the budget value carries over verbatim.
+        original = dict(thinking)
+        rewritten = {'type': 'enabled'}
+        if 'budget_tokens' in original and isinstance(original.get('budget_tokens'), int):
+            rewritten['budget_tokens'] = original['budget_tokens']
+        sanitized['thinking'] = rewritten
+        thinking = rewritten
+        logger.info(
+            "Rewrote thinking.type adaptive -> enabled (budget_tokens=%s); upstream Anthropic does not accept the adaptive shape",
+            rewritten.get('budget_tokens'),
+        )
+        # Fall through into the enabled-thinking constraints block.
+
+    if thinking and thinking.get('type') == 'enabled':
         logger.debug("Thinking enabled - applying Anthropic API constraints")
 
         # Apply Anthropic thinking constraints
@@ -77,6 +96,40 @@ def sanitize_anthropic_request(request_data: Dict[str, Any]) -> Dict[str, Any]:
         if 'top_k' in sanitized:
             logger.debug("Removing top_k parameter (not allowed with thinking)")
             del sanitized['top_k']
+
+    # ── Strict per-type thinking-block schema enforcement (final guard) ──
+    # Anthropic's validator rejects ANY key on a thinking block beyond what its
+    # `type` permits. Observed live:
+    #   thinking.disabled.budget_tokens: Extra inputs are not permitted
+    # emitted when a client builds {type:"disabled", budget_tokens:N}. This
+    # proxy is the single egress chokepoint for every Anthropic request from
+    # this host, so normalizing the thinking block here makes the entire class
+    # of "extra key on thinking" rejections impossible — independent of which
+    # client (letta-code local backend, etc.) or version produced the block.
+    # Runs after the adaptive->enabled rewrite above so it sees the final shape.
+    thinking = sanitized.get('thinking')
+    if isinstance(thinking, dict):
+        ttype = thinking.get('type')
+        if ttype == 'disabled':
+            # disabled permits zero sibling keys.
+            if len(thinking) > 1:
+                logger.info(
+                    "Stripping unsupported keys from disabled thinking block: %s",
+                    [k for k in thinking if k != 'type'],
+                )
+                sanitized['thinking'] = {'type': 'disabled'}
+        elif ttype == 'enabled':
+            # enabled permits only budget_tokens (+ optional display).
+            allowed = {'type', 'budget_tokens', 'display'}
+            extra = [k for k in thinking if k not in allowed]
+            if extra:
+                logger.info(
+                    "Stripping unsupported keys from enabled thinking block: %s",
+                    extra,
+                )
+                sanitized['thinking'] = {
+                    k: v for k, v in thinking.items() if k in allowed
+                }
 
     # Handle stop_sequences - remove if null or empty
     if 'stop_sequences' in sanitized:

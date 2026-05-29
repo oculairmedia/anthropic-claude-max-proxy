@@ -75,6 +75,22 @@ class ModelRegistryEntry:
 
 BASE_MODELS: List[BaseModelSpec] = [
     BaseModelSpec(
+        openai_id="opus-4-8",
+        anthropic_id="claude-opus-4-8",
+        created=1779422400,  # May 22, 2026
+        owned_by="anthropic",
+        context_length=200_000,
+        max_completion_tokens=131_072,  # 128K per official docs
+    ),
+    BaseModelSpec(
+        openai_id="opus-4-7",
+        anthropic_id="claude-opus-4-7",
+        created=1744761600,  # April 16, 2026
+        owned_by="anthropic",
+        context_length=200_000,
+        max_completion_tokens=131_072,  # 128K per official docs
+    ),
+    BaseModelSpec(
         openai_id="opus-4-6",
         anthropic_id="claude-opus-4-6",
         created=1738713600,  # February 5, 2026

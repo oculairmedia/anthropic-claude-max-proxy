@@ -54,6 +54,12 @@ async def anthropic_messages(request: AnthropicMessageRequest, raw_request: Requ
 
     # Prepare Anthropic request (pass through client parameters directly)
     anthropic_request = request.model_dump()
+    # Disabled thinking cannot carry budget_tokens; if a client only sent
+    # {"type":"disabled"} but Pydantic still emitted budget_tokens: null,
+    # drop it so the upstream Anthropic API doesn't 400 on the unexpected key.
+    thinking_block = anthropic_request.get("thinking")
+    if isinstance(thinking_block, dict) and thinking_block.get("type") == "disabled":
+        thinking_block.pop("budget_tokens", None)
 
     # Model resolution logic to detect reasoning variants and update request model
     original_model = anthropic_request.get("model")

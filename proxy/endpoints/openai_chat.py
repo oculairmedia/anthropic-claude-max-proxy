@@ -42,6 +42,21 @@ async def openai_chat_completions(request: OpenAIChatCompletionRequest, raw_requ
 
     logger.info(f"[{request_id}] ===== NEW OPENAI CHAT COMPLETION REQUEST =====")
 
+    # letta-mobile-c91q debug: always log incoming message shapes at INFO
+    # so we can see whether letta-code is sending image_url parts.
+    try:
+        _msgs_dbg = request.model_dump().get("messages") or []
+        for _i, _m in enumerate(_msgs_dbg[-3:]):
+            _role = _m.get("role", "?")
+            _c = _m.get("content")
+            if isinstance(_c, list):
+                _types = [p.get("type", "?") if isinstance(p, dict) else type(p).__name__ for p in _c]
+                logger.info(f"[{request_id}][c91q] msg[{_i}] role={_role} content_parts={_types}")
+            else:
+                logger.info(f"[{request_id}][c91q] msg[{_i}] role={_role} content=str({len(str(_c))}ch)")
+    except Exception as _e:
+        logger.info(f"[{request_id}][c91q] debug log error: {_e}")
+
     # Log the raw request data with full detail
     request_dict = request.model_dump()
     logger.debug(f"[{request_id}] ===== RAW CLIENT REQUEST (FULL DETAIL) =====")

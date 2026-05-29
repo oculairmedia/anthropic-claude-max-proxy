@@ -42,6 +42,10 @@ Each base model has three reasoning variants with different thinking budgets:
 | `gpt5codex` | 400,000 | 128,000 | ✓ | ✓ |
 | `gpt51` | 400,000 | 128,000 | ✓ | ✓ |
 | `gpt51codex` | 400,000 | 128,000 | ✓ | ✓ |
+| `gpt52` | 400,000 | 128,000 | ✓ | ✓ |
+| `gpt52codex` | 400,000 | 128,000 | ✓ | ✓ |
+| `gpt53` | 400,000 | 128,000 | ✓ | ✓ |
+| `gpt53codex` | 400,000 | 128,000 | ✓ | ✓ |
 | `codexmini` | 128,000 | 16,000 | ✗ | ✗ |
 
 ### Reasoning Variants (if enabled)
@@ -66,6 +70,22 @@ When `CHATGPT_EXPOSE_REASONING_VARIANTS` is enabled, the following variants are 
 | `gpt51codex-reasoning-low` | Low |
 | `gpt51codex-reasoning-medium` | Medium |
 | `gpt51codex-reasoning-high` | High |
+| `gpt52-reasoning-minimal` | Minimal |
+| `gpt52-reasoning-low` | Low |
+| `gpt52-reasoning-medium` | Medium |
+| `gpt52-reasoning-high` | High |
+| `gpt52codex-reasoning-minimal` | Minimal |
+| `gpt52codex-reasoning-low` | Low |
+| `gpt52codex-reasoning-medium` | Medium |
+| `gpt52codex-reasoning-high` | High |
+| `gpt53-reasoning-minimal` | Minimal |
+| `gpt53-reasoning-low` | Low |
+| `gpt53-reasoning-medium` | Medium |
+| `gpt53-reasoning-high` | High |
+| `gpt53codex-reasoning-minimal` | Minimal |
+| `gpt53codex-reasoning-low` | Low |
+| `gpt53codex-reasoning-medium` | Medium |
+| `gpt53codex-reasoning-high` | High |
 
 ## Custom Models
 
@@ -91,6 +111,10 @@ The following OpenAI native IDs are also accepted (but not listed in `/v1/models
 - `gpt-5-codex`
 - `gpt-5.1`
 - `gpt-5.1-codex`
+- `gpt-5.2`
+- `gpt-5.2-codex`
+- `gpt-5.3`
+- `gpt-5.3-codex`
 - `codex-mini-latest`
 
 Each OpenAI native ID also supports reasoning variants (when enabled):
@@ -98,16 +122,20 @@ Each OpenAI native ID also supports reasoning variants (when enabled):
 - `gpt-5-codex-minimal`, `gpt-5-codex-low`, `gpt-5-codex-medium`, `gpt-5-codex-high`
 - `gpt-5.1-minimal`, `gpt-5.1-low`, `gpt-5.1-medium`, `gpt-5.1-high`
 - `gpt-5.1-codex-minimal`, `gpt-5.1-codex-low`, `gpt-5.1-codex-medium`, `gpt-5.1-codex-high`
+- `gpt-5.2-minimal`, `gpt-5.2-low`, `gpt-5.2-medium`, `gpt-5.2-high`
+- `gpt-5.2-codex-minimal`, `gpt-5.2-codex-low`, `gpt-5.2-codex-medium`, `gpt-5.2-codex-high`
+- `gpt-5.3-minimal`, `gpt-5.3-low`, `gpt-5.3-medium`, `gpt-5.3-high`
+- `gpt-5.3-codex-minimal`, `gpt-5.3-codex-low`, `gpt-5.3-codex-medium`, `gpt-5.3-codex-high`
 
 ## Total Model Count
 
 - **Claude Base Models**: 4
 - **Claude Reasoning Variants**: 12 (3 per base model)
-- **ChatGPT Base Models**: 5
-- **ChatGPT Reasoning Variants**: 16 (when enabled)
+- **ChatGPT Base Models**: 9
+- **ChatGPT Reasoning Variants**: 32 (when enabled)
 - **Custom Models**: Varies based on configuration
 
-**Total Listed Models**: 21-37 (depending on configuration)
+**Total Listed Models**: 25-57 (depending on configuration)
 
 ## Notes
 

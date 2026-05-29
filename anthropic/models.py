@@ -5,9 +5,16 @@ from pydantic import BaseModel, Field
 
 
 class ThinkingParameter(BaseModel):
-    """Anthropic thinking/reasoning parameter"""
+    """Anthropic thinking/reasoning parameter.
+
+    `budget_tokens` is only valid when `type == "enabled"`; the Anthropic API
+    rejects requests where a `disabled` thinking block carries it. Keep the
+    field optional so clients sending only `{"type": "disabled"}` round-trip
+    cleanly through `model_dump()` (callers that need a default for the
+    enabled case should supply it explicitly upstream).
+    """
     type: str = Field(default="enabled")
-    budget_tokens: int = Field(default=16000)
+    budget_tokens: Optional[int] = None
 
 
 class OutputConfig(BaseModel):

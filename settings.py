@@ -65,6 +65,10 @@ TOKEN_FILE = config.get("TOKEN_FILE", str(Path.home() / ".llmux" / "tokens.json"
 # API Keys storage
 API_KEYS_FILE = config.get("API_KEYS_FILE", str(Path.home() / ".llmux" / "api_keys.json"))
 
+# Development mode: disable API key authentication on /v1/ and management endpoints
+# WARNING: Only use in trusted/internal networks. All requests will be allowed without auth.
+DISABLE_API_KEY_AUTH = config.get("DISABLE_API_KEY_AUTH", False)
+
 # Headless mode configuration
 # Long-term OAuth token from environment (e.g., from claude setup-token)
 ANTHROPIC_OAUTH_TOKEN = os.getenv("ANTHROPIC_OAUTH_TOKEN", None)
