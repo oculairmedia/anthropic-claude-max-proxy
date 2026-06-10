@@ -219,8 +219,10 @@ async def openai_chat_completions(request: OpenAIChatCompletionRequest, raw_requ
         api_key = model_config["api_key"]
 
         try:
-            # Pass request directly to custom provider (no Anthropic conversion)
-            openai_request_dict = request.model_dump()
+            # Pass request directly to custom provider (no Anthropic conversion).
+            # exclude_none: some providers (MiniMax) reject explicit nulls like
+            # response_format: null with a 400.
+            openai_request_dict = request.model_dump(exclude_none=True)
 
             if request.stream:
                 # Handle streaming response

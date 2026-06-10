@@ -101,6 +101,11 @@ def convert_anthropic_response_to_openai(anthropic_response: Dict[str, Any], mod
         reasoning_tokens = len(reasoning_content) // 4
         logger.debug(f"Extracted reasoning content: {len(reasoning_content)} chars, ~{reasoning_tokens} tokens")
 
+    # OpenAI convention: prompt_tokens INCLUDES cached + cache-creation tokens
+    # (Anthropic's input_tokens excludes them). Cost trackers (LiteLLM etc.)
+    # compute uncached input as prompt_tokens - cached - creation.
+    prompt_tokens = prompt_tokens + cached_tokens + cache_creation_tokens
+
     usage = {
         "prompt_tokens": prompt_tokens,
         "completion_tokens": completion_tokens,

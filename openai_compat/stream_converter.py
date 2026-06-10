@@ -450,10 +450,16 @@ async def convert_anthropic_stream_to_openai(
                         # Estimate reasoning tokens from accumulated character count
                         reasoning_tokens = reasoning_char_count // 4 if reasoning_char_count > 0 else 0
 
+                        # OpenAI convention: prompt_tokens INCLUDES cached +
+                        # cache-creation tokens (Anthropic's input_tokens
+                        # excludes them). Cost trackers compute uncached input
+                        # as prompt_tokens - cached - creation.
+                        prompt_tokens = input_tokens + cached_tokens + cache_creation_tokens
+
                         final_usage = {
-                            "prompt_tokens": input_tokens,
+                            "prompt_tokens": prompt_tokens,
                             "completion_tokens": output_tokens,
-                            "total_tokens": input_tokens + output_tokens,
+                            "total_tokens": prompt_tokens + output_tokens,
                             "prompt_tokens_details": {
                                 "cached_tokens": cached_tokens,
                                 "cache_creation_tokens": cache_creation_tokens,
