@@ -1,9 +1,23 @@
 """Request sanitization and validation for Anthropic API"""
 
 import logging
+import os
 from typing import Dict, Any
 
 logger = logging.getLogger(__name__)
+
+DEFAULT_THINKING_BUDGET_TOKENS = 10000
+
+
+def _default_thinking_budget() -> int:
+    raw = os.environ.get('ANTHROPIC_DEFAULT_THINKING_BUDGET', '')
+    try:
+        value = int(raw)
+        if value >= 1024:
+            return value
+    except ValueError:
+        pass
+    return DEFAULT_THINKING_BUDGET_TOKENS
 
 
 def sanitize_anthropic_request(request_data: Dict[str, Any]) -> Dict[str, Any]:
@@ -130,6 +144,37 @@ def sanitize_anthropic_request(request_data: Dict[str, Any]) -> Dict[str, Any]:
                 sanitized['thinking'] = {
                     k: v for k, v in thinking.items() if k in allowed
                 }
+            # enabled REQUIRES budget_tokens. Observed live (lcp-qanq):
+            # letta-code subagent dispatch with an explicit model override
+            # builds {type:"enabled"} with no budget, and Anthropic rejects
+            # with `thinking.enabled.budget_tokens: Field required`. Inject a
+            # default here at the chokepoint so every client gets a valid
+            # block regardless of which dispatch path built the request.
+            block = sanitized['thinking']
+            budget = block.get('budget_tokens')
+            if not isinstance(budget, int) or budget < 1024:
+                default_budget = _default_thinking_budget()
+                max_tokens = sanitized.get('max_tokens')
+                if isinstance(max_tokens, int) and max_tokens > 0:
+                    # Anthropic requires budget_tokens < max_tokens (min 1024).
+                    if max_tokens <= 1024:
+                        logger.info(
+                            "Thinking enabled without budget but max_tokens=%s leaves no room; disabling thinking",
+                            max_tokens,
+                        )
+                        sanitized['thinking'] = {'type': 'disabled'}
+                        block = None
+                    else:
+                        default_budget = min(default_budget, max_tokens - 1)
+                if block is not None:
+                    patched: Dict[str, Any] = dict(block)
+                    patched['budget_tokens'] = default_budget
+                    sanitized['thinking'] = patched
+                    logger.info(
+                        "Injected missing thinking budget_tokens=%s (was %r)",
+                        default_budget,
+                        budget,
+                    )
 
     # Handle stop_sequences - remove if null or empty
     if 'stop_sequences' in sanitized:
