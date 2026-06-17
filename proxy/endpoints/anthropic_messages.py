@@ -86,8 +86,11 @@ async def anthropic_messages(request: AnthropicMessageRequest, raw_request: Requ
             logger.info(f"[{request_id}] Injected thinking config from keyword: {thinking_config}")
         else:
             # Update budget if keyword specifies higher budget
-            existing_budget = anthropic_request["thinking"].get("budget_tokens", 0)
-            keyword_budget = thinking_config.get("budget_tokens", 0)
+            # `.get(key, 0)` still returns None when the key exists with a
+            # null value (letta-code sends thinking.budget_tokens: null), so
+            # coerce both sides to int before comparing.
+            existing_budget = anthropic_request["thinking"].get("budget_tokens", 0) or 0
+            keyword_budget = thinking_config.get("budget_tokens", 0) or 0
             if keyword_budget > existing_budget:
                 anthropic_request["thinking"]["budget_tokens"] = keyword_budget
                 logger.info(f"[{request_id}] Updated thinking budget from {existing_budget} to {keyword_budget}")
@@ -95,10 +98,10 @@ async def anthropic_messages(request: AnthropicMessageRequest, raw_request: Requ
     # Ensure max_tokens is sufficient if thinking is enabled
     thinking = anthropic_request.get("thinking")
     if thinking and thinking.get("type") == "enabled":
-        thinking_budget = thinking.get("budget_tokens", 16000)
+        thinking_budget = thinking.get("budget_tokens") or 16000
         min_response_tokens = 1024
         required_total = thinking_budget + min_response_tokens
-        if anthropic_request["max_tokens"] < required_total:
+        if (anthropic_request.get("max_tokens") or 0) < required_total:
             anthropic_request["max_tokens"] = required_total
             logger.debug(f"[{request_id}] Increased max_tokens to {required_total} (thinking: {thinking_budget} + response: {min_response_tokens})")
 
