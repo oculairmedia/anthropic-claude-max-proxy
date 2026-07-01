@@ -83,6 +83,14 @@ BASE_MODELS: List[BaseModelSpec] = [
         max_completion_tokens=131_072,  # 128K per official docs
     ),
     BaseModelSpec(
+        openai_id="sonnet-5",
+        anthropic_id="claude-sonnet-5",
+        created=1782864000,  # July 1, 2026
+        owned_by="anthropic",
+        context_length=1_000_000,
+        max_completion_tokens=131_072,  # 128K per official docs
+    ),
+    BaseModelSpec(
         openai_id="opus-4-8",
         anthropic_id="claude-opus-4-8",
         created=1779422400,  # May 22, 2026
