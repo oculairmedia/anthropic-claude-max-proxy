@@ -430,7 +430,7 @@ class ChatGPTProvider(BaseProvider):
 
         # Handle completion
         elif kind == "response.completed":
-            return {
+            chunk = {
                 "id": response_id,
                 "object": "chat.completion.chunk",
                 "created": created,
@@ -441,6 +441,27 @@ class ChatGPTProvider(BaseProvider):
                     "finish_reason": "stop"
                 }]
             }
+
+            # Responses API reports usage on the completed event; forward it so
+            # downstream gateways (e.g. LiteLLM) bill cached tokens at the
+            # cache-read rate instead of estimating everything as uncached input.
+            usage = evt.get("response", {}).get("usage") or {}
+            if usage:
+                input_tokens = usage.get("input_tokens", 0)
+                output_tokens = usage.get("output_tokens", 0)
+                cached_tokens = (usage.get("input_tokens_details") or {}).get("cached_tokens", 0)
+                reasoning_tokens = (usage.get("output_tokens_details") or {}).get("reasoning_tokens", 0)
+                chunk["usage"] = {
+                    "prompt_tokens": input_tokens,
+                    "completion_tokens": output_tokens,
+                    "total_tokens": usage.get("total_tokens", input_tokens + output_tokens),
+                    "prompt_tokens_details": {"cached_tokens": cached_tokens},
+                    "completion_tokens_details": {"reasoning_tokens": reasoning_tokens},
+                }
+                if cached_tokens > 0:
+                    logger.debug(f"ChatGPT cache hit: {cached_tokens}/{input_tokens} prompt tokens cached")
+
+            return chunk
 
         # Handle errors
         elif kind == "response.failed":
