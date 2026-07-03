@@ -15,6 +15,7 @@ from .endpoints import (
     auth_router,
     anthropic_messages_router,
     openai_chat_router,
+    openai_images_router,
     count_tokens_router,
     management_router,
 )
@@ -34,6 +35,7 @@ app.include_router(models_router)
 app.include_router(auth_router)
 app.include_router(anthropic_messages_router)
 app.include_router(openai_chat_router)
+app.include_router(openai_images_router)
 app.include_router(count_tokens_router)
 app.include_router(management_router)
 

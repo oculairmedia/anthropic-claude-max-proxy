@@ -78,6 +78,7 @@ ANTHROPIC_OAUTH_TOKEN = os.getenv("ANTHROPIC_OAUTH_TOKEN", None)
 CHATGPT_CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann"
 CHATGPT_OAUTH_ISSUER = "https://auth.openai.com"
 CHATGPT_API_ENDPOINT = "https://chatgpt.com/backend-api/codex/responses"
+CHATGPT_CODEX_BASE_URL = "https://chatgpt.com/backend-api/codex"
 # New default LLMux location for ChatGPT tokens
 CHATGPT_TOKEN_FILE = str(Path.home() / ".llmux" / "chatgpt" / "tokens.json")
 

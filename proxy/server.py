@@ -80,7 +80,7 @@ class ProxyServer:
             host=self.bind_address,
             port=PORT,
             log_level=LOG_LEVEL,
-            access_log=False  # Reduce noise in CLI
+            access_log=True  # Enabled for debugging
         )
         self.server = uvicorn.Server(self.config)
         self.server.run()

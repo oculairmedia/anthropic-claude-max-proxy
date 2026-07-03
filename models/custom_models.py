@@ -153,7 +153,7 @@ def _load_chatgpt_models() -> None:
             "context_length": 400000,
             "max_completion_tokens": 128000,
             "supports_reasoning": True,
-            "supports_vision": True,
+            "supports_vision": False,
             "default_instructions": CHATGPT_GPT5_CODEX_INSTRUCTIONS,
         },
         {
@@ -164,7 +164,7 @@ def _load_chatgpt_models() -> None:
             "context_length": 400000,
             "max_completion_tokens": 128000,
             "supports_reasoning": True,
-            "supports_vision": True,
+            "supports_vision": False,
             "default_instructions": CHATGPT_GPT5_CODEX_INSTRUCTIONS,
         },
         {

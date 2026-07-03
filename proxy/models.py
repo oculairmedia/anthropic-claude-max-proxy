@@ -1,7 +1,7 @@
 """
 Pydantic models for OpenAI API compatibility.
 """
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Literal
 from pydantic import BaseModel
 
 
@@ -49,3 +49,12 @@ class OpenAIChatCompletionRequest(BaseModel):
     stream_options: Optional[StreamOptions] = None  # Include usage in streaming responses
 
 
+class OpenAIImageGenerationRequest(BaseModel):
+    prompt: str
+    model: Optional[str] = "gpt-image-2"
+    n: Optional[int] = 1
+    quality: Optional[str] = "medium"
+    response_format: Optional[Literal["url", "b64_json"]] = "b64_json"
+    size: Optional[str] = "1024x1024"
+    background: Optional[str] = "opaque"
+    output_format: Optional[str] = "png"
