@@ -113,8 +113,11 @@ class ChatGPTProvider(BaseProvider):
         openai_model = get_openai_model_id(model)
 
         # Extract reasoning effort from OpenAI model ID if present (e.g., gpt-5-high)
+        # NOTE: "xhigh" must be checked before "high" because it ends with the
+        # "high" substring; ordering longest/overlapping suffixes first avoids
+        # mis-parsing "gpt-5.6-sol-xhigh" as "...-sol-x" + "high".
         model_lower = openai_model.lower()
-        for effort in ["minimal", "low", "medium", "high"]:
+        for effort in ["minimal", "xhigh", "ultra", "max", "low", "medium", "high"]:
             if model_lower.endswith(f"-{effort}"):
                 reasoning_effort = reasoning_effort or effort
                 # Remove effort suffix from model name for API call
@@ -128,8 +131,9 @@ class ChatGPTProvider(BaseProvider):
             effort = reasoning_effort or CHATGPT_DEFAULT_REASONING_EFFORT
             summary = reasoning_summary or CHATGPT_DEFAULT_REASONING_SUMMARY
 
-            # Validate effort
-            if effort not in ["minimal", "low", "medium", "high"]:
+            # Validate effort. These are the literal values the ChatGPT/Codex
+            # backend accepts (note: "xhigh", NOT "extra-high"/"extrahigh").
+            if effort not in ["minimal", "low", "medium", "high", "xhigh", "max", "ultra"]:
                 effort = "medium"
 
             # Validate summary
