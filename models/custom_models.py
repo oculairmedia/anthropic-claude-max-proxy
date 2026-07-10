@@ -165,6 +165,8 @@ def _load_chatgpt_models() -> None:
             "max_completion_tokens": 128000,
             "supports_reasoning": True,
             "supports_vision": False,
+            # Backend-verified: supports low/medium/high/xhigh
+            "supported_efforts": ["low", "medium", "high", "xhigh"],
             "default_instructions": CHATGPT_GPT5_CODEX_INSTRUCTIONS,
         },
         {
@@ -175,6 +177,8 @@ def _load_chatgpt_models() -> None:
             "max_completion_tokens": 128000,
             "supports_reasoning": True,
             "supports_vision": True,
+            # Backend-verified: supports low/medium/high/xhigh
+            "supported_efforts": ["low", "medium", "high", "xhigh"],
             "default_instructions": CHATGPT_BASE_INSTRUCTIONS,
         },
         {
@@ -225,6 +229,8 @@ def _load_chatgpt_models() -> None:
             "max_completion_tokens": 128000,
             "supports_reasoning": True,
             "supports_vision": True,
+            # Backend-verified: supports low/medium/high/xhigh
+            "supported_efforts": ["low", "medium", "high", "xhigh"],
             "default_instructions": CHATGPT_BASE_INSTRUCTIONS,
         },
         {
@@ -246,6 +252,47 @@ def _load_chatgpt_models() -> None:
             "supports_reasoning": True,
             "supports_vision": True,
             "default_instructions": CHATGPT_BASE_INSTRUCTIONS,
+        },
+        # --- GPT-5.6 family (agentic coding models) ---
+        # Specs discovered from the live ChatGPT/Codex backend:
+        # https://chatgpt.com/backend-api/codex/models
+        # All: text+image input (supports_vision=True), agentic coding models
+        # (CHATGPT_GPT5_CODEX_INSTRUCTIONS), context_window 372000.
+        {
+            "id": "gpt-5.6-sol",
+            "openai_id": "gpt-5.6-sol",
+            "owned_by": "openai-chatgpt",
+            "context_length": 372000,
+            "max_completion_tokens": 128000,
+            "supports_reasoning": True,
+            "supports_vision": True,
+            # Backend default_reasoning_level "low"; efforts include ultra.
+            "supported_efforts": ["low", "medium", "high", "xhigh", "max", "ultra"],
+            "default_instructions": CHATGPT_GPT5_CODEX_INSTRUCTIONS,
+        },
+        {
+            "id": "gpt-5.6-terra",
+            "openai_id": "gpt-5.6-terra",
+            "owned_by": "openai-chatgpt",
+            "context_length": 372000,
+            "max_completion_tokens": 128000,
+            "supports_reasoning": True,
+            "supports_vision": True,
+            # Backend default_reasoning_level "medium"; efforts include ultra.
+            "supported_efforts": ["low", "medium", "high", "xhigh", "max", "ultra"],
+            "default_instructions": CHATGPT_GPT5_CODEX_INSTRUCTIONS,
+        },
+        {
+            "id": "gpt-5.6-luna",
+            "openai_id": "gpt-5.6-luna",
+            "owned_by": "openai-chatgpt",
+            "context_length": 372000,
+            "max_completion_tokens": 128000,
+            "supports_reasoning": True,
+            "supports_vision": True,
+            # Backend default_reasoning_level "medium"; luna has NO ultra.
+            "supported_efforts": ["low", "medium", "high", "xhigh", "max"],
+            "default_instructions": CHATGPT_GPT5_CODEX_INSTRUCTIONS,
         },
         {
             "id": "o3",
@@ -404,7 +451,10 @@ def _load_chatgpt_models() -> None:
 
     # Register reasoning effort variants if enabled
     if settings.CHATGPT_EXPOSE_REASONING_VARIANTS:
-        reasoning_efforts = ["minimal", "low", "medium", "high"]
+        # Default (backward-compat) effort list applied to models that do NOT
+        # declare their own `supported_efforts`. This preserves the historical
+        # proxy behavior (including "minimal") for all existing models.
+        default_reasoning_efforts = ["minimal", "low", "medium", "high"]
         reasoning_models = [model["id"] for model in base_models if model.get("supports_reasoning")]
 
         for base_model in reasoning_models:
@@ -415,6 +465,11 @@ def _load_chatgpt_models() -> None:
 
             # Get the actual OpenAI model ID for this base model
             openai_base_id = base_config.get("openai_id", base_model)
+
+            # Per-model effort support (backend-verified). Falls back to the
+            # global default list for models without an explicit override so
+            # existing models keep [minimal, low, medium, high].
+            reasoning_efforts = base_config.get("supported_efforts") or default_reasoning_efforts
 
             for effort in reasoning_efforts:
                 # Our custom variant ID (e.g., gpt5-reasoning-low)
