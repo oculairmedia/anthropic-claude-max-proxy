@@ -9,7 +9,7 @@ from typing import Dict
 CLAUDE_CODE_SPOOF_MESSAGE = "You are Claude Code, Anthropic's official CLI for Claude."
 
 # User-Agent string for API requests
-USER_AGENT = "claude-cli/1.0.113 (external, cli)"
+USER_AGENT = "claude-cli/2.1.282 (external, cli)"
 
 # x-app header value
 X_APP_HEADER = "cli"

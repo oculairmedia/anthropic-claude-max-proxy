@@ -91,6 +91,14 @@ BASE_MODELS: List[BaseModelSpec] = [
         max_completion_tokens=131_072,  # 128K per official docs
     ),
     BaseModelSpec(
+        openai_id="opus-5-5",
+        anthropic_id="claude-opus-5-5",
+        created=1790121600,  # September 23, 2026
+        owned_by="anthropic",
+        context_length=1_000_000,
+        max_completion_tokens=131_072,
+    ),
+    BaseModelSpec(
         openai_id="opus-4-8",
         anthropic_id="claude-opus-4-8",
         created=1779422400,  # May 22, 2026

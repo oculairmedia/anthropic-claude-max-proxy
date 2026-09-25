@@ -15,6 +15,7 @@ from chatgpt_oauth import ChatGPTOAuthManager
 from providers.chatgpt_provider import ChatGPTProvider
 import settings
 from stream_debug import maybe_create_stream_tracer
+from proxy.endpoints.openai_stream_aggregate import UpstreamStreamError, aggregate_openai_sse
 from anthropic import make_anthropic_request
 from openai_compat import convert_anthropic_response_to_openai
 from ..models import OpenAIChatCompletionRequest
@@ -172,21 +173,20 @@ async def openai_chat_completions(request: OpenAIChatCompletionRequest, raw_requ
                 # Handle non-streaming response
                 logger.debug(f"[{request_id}] Initiating non-streaming request to ChatGPT")
 
-                response = await chatgpt_provider.make_request(
-                    openai_request_dict,
-                    request_id
-                )
-
-                if response.status_code != 200:
-                    error_body = response.json() if response.content else {"error": {"message": "ChatGPT API error"}}
-                    logger.error(f"[{request_id}] ChatGPT error {response.status_code}: {error_body}")
-                    raise HTTPException(
-                        status_code=response.status_code,
-                        detail=error_body
+                # The ChatGPT Responses backend only serves streaming requests
+                # ("Stream must be set to true"), so stream upstream and fold the
+                # chunks into one chat.completion for the client.
+                try:
+                    return await aggregate_openai_sse(
+                        chatgpt_provider.stream_response(openai_request_dict, request_id),
+                        fallback_model=request.model,
                     )
-
-                # Return ChatGPT response directly (already in OpenAI format)
-                return response.json()
+                except UpstreamStreamError as e:
+                    logger.error(f"[{request_id}] ChatGPT non-stream aggregation error: {e}")
+                    raise HTTPException(
+                        status_code=502,
+                        detail={"error": {"message": f"ChatGPT API error: {e}"}}
+                    )
 
         except ValueError as e:
             # OAuth credential error
