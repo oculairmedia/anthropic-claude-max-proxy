@@ -61,6 +61,9 @@ def _apply_event(state: Dict[str, Any], event: Dict[str, Any]) -> None:
     if "error" in event:
         error = event["error"]
         message = error.get("message") if isinstance(error, dict) else str(error)
+        upstream = error.get("upstream_body") if isinstance(error, dict) else None
+        if upstream:
+            message = f"{message}: {upstream}"
         raise UpstreamStreamError(message or "upstream stream error")
     state["id"] = state["id"] or event.get("id")
     state["model"] = state["model"] or event.get("model")

@@ -1,7 +1,7 @@
 """Custom models configuration and registration"""
 import logging
 from pathlib import Path
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List, Tuple
 import settings
 
 from models.registry import ModelRegistryEntry, _register_model, OPENAI_MODELS_LIST
@@ -633,6 +633,28 @@ def get_openai_model_id(model_id: str) -> str:
 
     # Return the base OpenAI ID
     return openai_base_id
+
+
+# Effort suffixes the ChatGPT/Codex backend encodes into variant ids. Ordered
+# so overlapping suffixes win: "xhigh" before "high" (it ends with "high").
+CHATGPT_EFFORT_SUFFIXES = ("minimal", "xhigh", "ultra", "max", "low", "medium", "high")
+
+
+def resolve_chatgpt_model(model_id: str) -> Tuple[str, Optional[str]]:
+    """Resolve a ChatGPT model id to (upstream model id, reasoning effort).
+
+    The Codex backend only knows base model ids (``gpt-5.6-sol``); reasoning
+    variants (``gpt-5.6-sol-reasoning-high`` or the hidden alias
+    ``gpt-5.6-sol-high``) must be sent as the base id plus
+    ``reasoning.effort``. Both the chat-completions and the Responses
+    endpoints use this so they resolve identically.
+    """
+    upstream = get_openai_model_id(model_id)
+    lowered = upstream.lower()
+    for effort in CHATGPT_EFFORT_SUFFIXES:
+        if lowered.endswith(f"-{effort}"):
+            return upstream[: -len(f"-{effort}")], effort
+    return upstream, None
 
 
 def get_custom_model_config(model_id: str) -> Optional[Dict[str, Any]]:

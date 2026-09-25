@@ -6,6 +6,7 @@ from .models import router as models_router
 from .auth import router as auth_router
 from .anthropic_messages import router as anthropic_messages_router
 from .openai_chat import router as openai_chat_router
+from .openai_responses import router as openai_responses_router
 from .openai_images import router as openai_images_router
 from .count_tokens import router as count_tokens_router
 from .management import router as management_router
@@ -16,6 +17,7 @@ __all__ = [
     'auth_router',
     'anthropic_messages_router',
     'openai_chat_router',
+    'openai_responses_router',
     'openai_images_router',
     'count_tokens_router',
     'management_router',

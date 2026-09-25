@@ -99,6 +99,17 @@ BASE_MODELS: List[BaseModelSpec] = [
         max_completion_tokens=131_072,
     ),
     BaseModelSpec(
+        # claude-opus-5 is served by Anthropic (verified live) and clients
+        # (Letta App Server) ask for it as "opus-5"; limits assumed to match
+        # opus-5-5.
+        openai_id="opus-5",
+        anthropic_id="claude-opus-5",
+        created=1785542400,  # August 1, 2026 (approximate)
+        owned_by="anthropic",
+        context_length=1_000_000,
+        max_completion_tokens=131_072,
+    ),
+    BaseModelSpec(
         openai_id="opus-4-8",
         anthropic_id="claude-opus-4-8",
         created=1779422400,  # May 22, 2026

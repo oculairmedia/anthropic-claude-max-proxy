@@ -25,7 +25,7 @@ from chatgpt_oauth import (
     convert_tools_chat_to_responses,
 )
 from chatgpt_oauth.session import ensure_session_id
-from models import get_chatgpt_default_instructions, get_openai_model_id
+from models import get_chatgpt_default_instructions, resolve_chatgpt_model
 
 if TYPE_CHECKING:
     from stream_debug import StreamTracer
@@ -109,20 +109,11 @@ class ChatGPTProvider(BaseProvider):
         reasoning_effort = request_data.get("reasoning_effort")
         reasoning_summary = request_data.get("reasoning_summary")
 
-        # Get the actual OpenAI model ID to send to the API
-        openai_model = get_openai_model_id(model)
-
-        # Extract reasoning effort from OpenAI model ID if present (e.g., gpt-5-high)
-        # NOTE: "xhigh" must be checked before "high" because it ends with the
-        # "high" substring; ordering longest/overlapping suffixes first avoids
-        # mis-parsing "gpt-5.6-sol-xhigh" as "...-sol-x" + "high".
-        model_lower = openai_model.lower()
-        for effort in ["minimal", "xhigh", "ultra", "max", "low", "medium", "high"]:
-            if model_lower.endswith(f"-{effort}"):
-                reasoning_effort = reasoning_effort or effort
-                # Remove effort suffix from model name for API call
-                openai_model = openai_model[:-len(f"-{effort}")]
-                break
+        # Resolve the upstream model id and any effort encoded in the variant id
+        # (e.g. gpt-5.6-sol-reasoning-high -> gpt-5.6-sol + effort "high").
+        # An explicit reasoning_effort on the request wins over the suffix.
+        openai_model, suffix_effort = resolve_chatgpt_model(model)
+        reasoning_effort = reasoning_effort or suffix_effort
 
         # Build reasoning parameter if needed (matching ChatMock format)
         # ChatMock format: {"effort": "medium", "summary": "auto"}
