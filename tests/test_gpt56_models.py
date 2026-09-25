@@ -34,6 +34,19 @@ def test_new_56_models_registered():
         assert base in MODEL_REGISTRY, f"{base} missing from MODEL_REGISTRY"
 
 
+def test_gpt6_sol_and_luna_registered():
+    for base in ("gpt-6-sol", "gpt-6-luna"):
+        assert is_chatgpt_model(base), f"{base} not registered"
+        assert base in MODEL_REGISTRY, f"{base} missing from MODEL_REGISTRY"
+
+    for effort in ("low", "medium", "high", "xhigh", "max", "ultra"):
+        assert is_chatgpt_model(f"gpt-6-sol-reasoning-{effort}")
+    for effort in ("low", "medium", "high", "xhigh", "max"):
+        assert is_chatgpt_model(f"gpt-6-luna-reasoning-{effort}")
+    assert not is_chatgpt_model("gpt-6-luna-reasoning-ultra")
+    assert not is_chatgpt_model("gpt-6-terra")
+
+
 def test_sol_terra_full_effort_ladder():
     for base in ("gpt-5.6-sol", "gpt-5.6-terra"):
         for effort in ("low", "medium", "high", "xhigh", "max", "ultra"):
@@ -79,10 +92,14 @@ def test_openai_native_alias_mapping():
     # Hidden native alias itself is looked up as a chatgpt model.
     assert is_chatgpt_model("gpt-5.6-sol-ultra")
     assert is_chatgpt_model("gpt-5.5-xhigh")
+    assert get_openai_model_id("gpt-6-sol-reasoning-ultra") == "gpt-6-sol-ultra"
+    assert get_openai_model_id("gpt-6-luna-reasoning-max") == "gpt-6-luna-max"
+    assert is_chatgpt_model("gpt-6-sol-ultra")
+    assert is_chatgpt_model("gpt-6-luna-max")
 
 
 def test_context_window_and_output():
-    for base in ("gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"):
+    for base in ("gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-6-sol", "gpt-6-luna"):
         cfg = CHATGPT_MODELS_CONFIG[base]
         assert cfg["context_length"] == 372000, base
         assert cfg["max_completion_tokens"] == 128000, base
@@ -109,6 +126,8 @@ def test_effort_suffix_parser_recognizes_new_efforts():
 
     assert parse("gpt-5.6-sol-ultra") == ("gpt-5.6-sol", "ultra")
     assert parse("gpt-5.6-terra-max") == ("gpt-5.6-terra", "max")
+    assert parse("gpt-6-sol-ultra") == ("gpt-6-sol", "ultra")
+    assert parse("gpt-6-luna-max") == ("gpt-6-luna", "max")
     # Critical: xhigh must NOT be mis-parsed as "high".
     assert parse("gpt-5.5-xhigh") == ("gpt-5.5", "xhigh")
     assert parse("gpt-5.5-high") == ("gpt-5.5", "high")
