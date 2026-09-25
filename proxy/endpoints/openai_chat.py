@@ -16,6 +16,7 @@ from providers.chatgpt_provider import ChatGPTProvider
 import settings
 from stream_debug import maybe_create_stream_tracer
 from proxy.endpoints.openai_stream_aggregate import UpstreamStreamError, aggregate_openai_sse
+from proxy.endpoints.responses_translation import status_for_error
 from anthropic import make_anthropic_request
 from openai_compat import convert_anthropic_response_to_openai
 from ..models import OpenAIChatCompletionRequest
@@ -182,12 +183,17 @@ async def openai_chat_completions(request: OpenAIChatCompletionRequest, raw_requ
                         fallback_model=request.model,
                     )
                 except UpstreamStreamError as e:
-                    logger.error(f"[{request_id}] ChatGPT non-stream aggregation error: {e}")
+                    # Keep the upstream status for client errors (a 400 from the
+                    # backend is the caller's problem, not a proxy fault).
+                    status = status_for_error(None, str(e))
+                    logger.error(f"[{request_id}] ChatGPT non-stream aggregation error ({status}): {e}")
                     raise HTTPException(
-                        status_code=502,
+                        status_code=status,
                         detail={"error": {"message": f"ChatGPT API error: {e}"}}
                     )
 
+        except HTTPException:
+            raise
         except ValueError as e:
             # OAuth credential error
             logger.error(f"[{request_id}] ChatGPT OAuth error: {e}")
@@ -443,163 +449,3 @@ async def openai_chat_completions(request: OpenAIChatCompletionRequest, raw_requ
                 }
             }
         )
-
-
-@router.post("/v1/responses")
-async def openai_responses(request: Request):
-    import httpx
-    from chatgpt_oauth.session import ensure_session_id
-
-    request_id = str(uuid.uuid4())[:8]
-    start_time = time.time()
-
-    logger.info(f"[{request_id}] ===== NEW OPENAI RESPONSES API REQUEST =====")
-
-    # Get valid OAuth credentials
-    access_token, account_id = await chatgpt_oauth_manager.get_auth_credentials_async()
-    if not access_token or not account_id:
-        logger.error(f"[{request_id}] No valid ChatGPT OAuth credentials available")
-        raise HTTPException(
-            status_code=401,
-            detail={"error": {"message": "No valid ChatGPT OAuth credentials available"}}
-        )
-
-    try:
-        payload = await request.json()
-    except Exception as e:
-        logger.error(f"[{request_id}] Failed to parse request JSON: {e}")
-        raise HTTPException(status_code=400, detail="Invalid JSON body")
-
-    logger.debug(f"[{request_id}] Responses API Payload: {json.dumps(payload, indent=2)}")
-
-    # Extract model and determine if we should route to ChatGPT
-    model = payload.get("model", "gpt5")
-
-    # Get session ID
-    input_items = payload.get("input", [])
-    instructions = payload.get("instructions")
-    if not instructions or not isinstance(instructions, str) or not instructions.strip():
-        from models import get_chatgpt_default_instructions
-        instructions = get_chatgpt_default_instructions(model)
-
-    if isinstance(instructions, str) and instructions.strip():
-        pass
-    else:
-        instructions = "You are a helpful coding assistant."
-
-    session_id = ensure_session_id(instructions, input_items, payload.get("prompt_cache_key"))
-
-    # Build clean payload containing only fields supported by the ChatGPT Responses API
-    from models import get_openai_model_id
-    openai_model = get_openai_model_id(model)
-
-    clean_payload = {
-        "model": openai_model,
-        "input": input_items,
-        "instructions": instructions,
-        "store": bool(payload.get("store", False)),
-        "stream": bool(payload.get("stream", False)),
-        "prompt_cache_key": session_id,
-    }
-
-    # Optional fields
-    if "tools" in payload:
-        clean_payload["tools"] = payload["tools"]
-    if "tool_choice" in payload:
-        clean_payload["tool_choice"] = payload["tool_choice"]
-    if "parallel_tool_calls" in payload:
-        clean_payload["parallel_tool_calls"] = payload["parallel_tool_calls"]
-    if "reasoning" in payload:
-        clean_payload["reasoning"] = payload["reasoning"]
-    if "include" in payload:
-        clean_payload["include"] = payload["include"]
-
-    payload = clean_payload
-
-    headers = {
-        "Authorization": f"Bearer {access_token}",
-        "Content-Type": "application/json",
-        "Accept": "text/event-stream" if payload.get("stream") else "application/json",
-        "chatgpt-account-id": account_id,
-        "OpenAI-Beta": "responses=experimental",
-        "session_id": session_id,
-    }
-
-    endpoint = settings.CHATGPT_API_ENDPOINT
-
-    if payload.get("stream"):
-        logger.debug(f"[{request_id}] Initiating streaming request to ChatGPT Responses API")
-
-        tracer = maybe_create_stream_tracer(
-            enabled=settings.STREAM_TRACE_ENABLED,
-            request_id=request_id,
-            route="chatgpt-responses",
-            base_dir=settings.STREAM_TRACE_DIR,
-            max_bytes=settings.STREAM_TRACE_MAX_BYTES,
-        )
-
-        async def stream_generator():
-            async with httpx.AsyncClient(timeout=httpx.Timeout(settings.STREAM_TIMEOUT, connect=settings.CONNECT_TIMEOUT, read=settings.READ_TIMEOUT)) as client:
-                try:
-                    async with client.stream(
-                        "POST",
-                        endpoint,
-                        json=payload,
-                        headers=headers
-                    ) as response:
-                        if response.status_code != 200:
-                            error_text = await response.aread()
-                            error_json = error_text.decode()
-                            logger.error(f"[{request_id}] ChatGPT error {response.status_code}: {error_json}")
-                            if tracer:
-                                tracer.log_error(f"ChatGPT error status={response.status_code} body={error_json}")
-                            yield f'data: {{"error": {{"message": "ChatGPT API error: {response.status_code}", "detail": {json.dumps(error_json)}}}}}\n\n'
-                            return
-
-                        async for line in response.aiter_lines():
-                            if tracer:
-                                tracer.log_source_chunk(line + "\n")
-                            yield line + "\n"
-                except Exception as e:
-                    logger.error(f"[{request_id}] ChatGPT Responses stream error: {e}", exc_info=True)
-                    yield f'data: {{"error": {{"message": "Stream error: {str(e)}"}}}}\n\n'
-                finally:
-                    if tracer:
-                        tracer.close()
-
-        return StreamingResponse(
-            stream_generator(),
-            media_type="text/event-stream",
-            headers={
-                "Cache-Control": "no-cache",
-                "Connection": "keep-alive",
-                "X-Accel-Buffering": "no",
-            }
-        )
-    else:
-        logger.debug(f"[{request_id}] Initiating non-streaming request to ChatGPT Responses API")
-        async with httpx.AsyncClient(timeout=httpx.Timeout(settings.REQUEST_TIMEOUT, connect=settings.CONNECT_TIMEOUT)) as client:
-            try:
-                response = await client.post(
-                    endpoint,
-                    json=payload,
-                    headers=headers
-                )
-
-                elapsed_ms = int((time.time() - start_time) * 1000)
-                logger.info(f"[{request_id}] ChatGPT Responses request completed in {elapsed_ms}ms status={response.status_code}")
-
-                if response.status_code != 200:
-                    error_body = response.json() if response.content else {"error": {"message": "ChatGPT API error"}}
-                    logger.error(f"[{request_id}] ChatGPT error {response.status_code}: {error_body}")
-                    raise HTTPException(
-                        status_code=response.status_code,
-                        detail=error_body
-                    )
-                return response.json()
-            except Exception as e:
-                logger.error(f"[{request_id}] ChatGPT Responses request failed: {e}", exc_info=True)
-                raise HTTPException(
-                    status_code=500,
-                    detail={"error": {"message": f"ChatGPT request failed: {str(e)}"}}
-                )
