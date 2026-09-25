@@ -19,6 +19,7 @@ from settings import (
     REQUEST_TIMEOUT,
 )
 from providers.base_provider import BaseProvider
+from providers.tool_names import ToolNameMap, sanitize_responses_payload
 from chatgpt_oauth import (
     ChatGPTOAuthManager,
     convert_chat_messages_to_responses_input,
@@ -141,7 +142,7 @@ class ChatGPTProvider(BaseProvider):
             "model": openai_model,
             "input": input_items,
             "tools": responses_tools,
-            "tool_choice": tool_choice if tool_choice in ("auto", "none") else "auto",
+            "tool_choice": self._responses_tool_choice(tool_choice),
             "parallel_tool_calls": bool(parallel_tool_calls),
             "store": False,
             "stream": True,
@@ -157,6 +158,19 @@ class ChatGPTProvider(BaseProvider):
             payload["include"] = ["reasoning.encrypted_content"]
 
         return payload
+
+    @staticmethod
+    def _responses_tool_choice(tool_choice: Any) -> Any:
+        """Map a chat tool_choice to the Responses form (verified live: the
+        backend accepts auto, none, required and {"type":"function","name"})."""
+        if tool_choice in ("auto", "none", "required"):
+            return tool_choice
+        if isinstance(tool_choice, dict) and tool_choice.get("type") == "function":
+            fn = tool_choice.get("function") if isinstance(tool_choice.get("function"), dict) else {}
+            name = fn.get("name") or tool_choice.get("name")
+            if isinstance(name, str) and name:
+                return {"type": "function", "name": name}
+        return "auto"
 
     async def make_request(
         self,
@@ -190,6 +204,7 @@ class ChatGPTProvider(BaseProvider):
 
         # Build Responses API payload
         payload = self._build_responses_payload(request_data, session_id)
+        sanitize_responses_payload(payload)
         payload["stream"] = False  # Non-streaming
 
         headers = self._get_headers(access_token, account_id, session_id, accept="application/json")
@@ -247,6 +262,9 @@ class ChatGPTProvider(BaseProvider):
 
         # Build Responses API payload
         payload = self._build_responses_payload(request_data, session_id)
+        # The backend rejects tool names outside ^[a-zA-Z0-9_-]+$ (e.g. Letta's
+        # canvas.list); alias them upstream and map them back below.
+        tool_names = sanitize_responses_payload(payload)
 
         headers = self._get_headers(access_token, account_id, session_id)
 
@@ -318,7 +336,7 @@ class ChatGPTProvider(BaseProvider):
                             tracer.log_source_chunk(line)
 
                         # Translate Responses API events to OpenAI format
-                        openai_chunk = self._translate_response_event(evt, response_id, created, model)
+                        openai_chunk = self._translate_response_event(evt, response_id, created, model, tool_names)
 
                         if openai_chunk:
                             chunk_str = f"data: {json.dumps(openai_chunk)}\n\n"
@@ -347,7 +365,8 @@ class ChatGPTProvider(BaseProvider):
         evt: Dict[str, Any],
         response_id: str,
         created: int,
-        model: str
+        model: str,
+        tool_names: Optional[ToolNameMap] = None,
     ) -> Optional[Dict[str, Any]]:
         """Translate Responses API event to OpenAI format
 
@@ -399,6 +418,8 @@ class ChatGPTProvider(BaseProvider):
             if item.get("type") == "function_call":
                 call_id = item.get("call_id", "")
                 name = item.get("name", "")
+                if tool_names is not None:
+                    name = tool_names.down(name)
                 args = item.get("arguments", "")
 
                 if isinstance(args, dict):

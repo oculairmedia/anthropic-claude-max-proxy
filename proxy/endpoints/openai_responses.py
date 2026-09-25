@@ -31,6 +31,12 @@ from models import (
     resolve_chatgpt_model,
 )
 from stream_debug import maybe_create_stream_tracer
+from providers.tool_names import (
+    ToolNameMap,
+    restore_response_object,
+    restore_responses_event,
+    sanitize_responses_payload,
+)
 from proxy.endpoints import openai_chat
 from proxy.endpoints.responses_translation import (
     ChatToResponsesStream,
@@ -112,6 +118,17 @@ def build_chatgpt_payload(payload: Dict[str, Any], model: str, input_items: list
     return clean
 
 
+def restore_sse_line(line: str, tool_names: ToolNameMap) -> str:
+    """Map aliased tool names back in one upstream SSE `data:` line."""
+    if tool_names.is_identity or not line.startswith("data:"):
+        return line
+    try:
+        event = json.loads(line[len("data:"):].strip())
+    except json.JSONDecodeError:
+        return line
+    return "data: " + json.dumps(restore_responses_event(event, tool_names), separators=(",", ":"))
+
+
 def _dropped_fields(payload: Dict[str, Any]) -> list:
     dropped = [k for k in _CHATGPT_DROPPED_FIELDS if payload.get(k) is not None]
     if payload.get("store"):
@@ -167,6 +184,11 @@ async def _chatgpt_responses(request_id: str, payload: Dict[str, Any], model: st
         return error_response(401, "No valid ChatGPT OAuth credentials available", "authentication_error")
 
     upstream_payload = build_chatgpt_payload(payload, model, input_items)
+    # The backend rejects tool names outside ^[a-zA-Z0-9_-]+$ (Letta's
+    # canvas.* host tools); alias them upstream, map them back downstream.
+    tool_names = sanitize_responses_payload(upstream_payload)
+    if not tool_names.is_identity:
+        logger.info(f"[{request_id}] Aliased tool names for ChatGPT: {tool_names.aliases()}")
     dropped = _dropped_fields(payload)
     if dropped:
         logger.info(f"[{request_id}] Dropping fields unsupported by the ChatGPT backend: {dropped}")
@@ -205,7 +227,7 @@ async def _chatgpt_responses(request_id: str, payload: Dict[str, Any], model: st
 
     if not payload.get("stream"):
         try:
-            return await fold_responses_sse(upstream.aiter_bytes())
+            return restore_response_object(await fold_responses_sse(upstream.aiter_bytes()), tool_names)
         except UpstreamResponseFailed as e:
             logger.error(f"[{request_id}] ChatGPT response failed: {e}")
             return error_response(e.status, str(e))
@@ -229,7 +251,7 @@ async def _chatgpt_responses(request_id: str, payload: Dict[str, Any], model: st
             async for line in upstream.aiter_lines():
                 if tracer:
                     tracer.log_source_chunk(line + "\n")
-                yield line + "\n"
+                yield restore_sse_line(line, tool_names) + "\n"
         except Exception as e:  # upstream dropped mid-stream
             logger.error(f"[{request_id}] ChatGPT Responses stream error: {e}", exc_info=True)
             event = {"type": "error", "message": f"Stream error: {e}", "code": "upstream_stream_error"}
