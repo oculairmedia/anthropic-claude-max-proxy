@@ -99,7 +99,7 @@ def test_opus5_bridges_to_chat_and_returns_response_object(client, anthropic_tok
     async def fake_anthropic(anthropic_request, access_token, beta_headers):
         seen["request"] = anthropic_request
         return httpx.Response(200, json={
-            "id": "msg_1", "type": "message", "role": "assistant", "model": "claude-opus-5",
+            "id": "msg_1", "type": "message", "role": "assistant", "model": "claude-opus-5-5",
             "content": [{"type": "text", "text": "Hello from Opus"},
                         {"type": "tool_use", "id": "toolu_1", "name": "lookup", "input": {"q": "x"}}],
             "stop_reason": "tool_use",
@@ -108,7 +108,7 @@ def test_opus5_bridges_to_chat_and_returns_response_object(client, anthropic_tok
 
     monkeypatch.setattr(openai_chat, "make_anthropic_request", fake_anthropic)
     resp = client.post("/v1/responses", json={
-        "model": "opus-5",
+        "model": "opus-5-5",
         "instructions": "Be terse.",
         "input": [
             {"type": "message", "role": "user", "content": [{"type": "input_text", "text": "hi"}]},
@@ -120,7 +120,7 @@ def test_opus5_bridges_to_chat_and_returns_response_object(client, anthropic_tok
     })
     assert resp.status_code == 200, resp.text
     body = resp.json()
-    assert body["object"] == "response" and body["model"] == "opus-5"
+    assert body["object"] == "response" and body["model"] == "opus-5-5"
     assert body["output"][0]["type"] == "message"
     assert body["output"][0]["content"][0]["text"] == "Hello from Opus"
     call = body["output"][1]
@@ -129,7 +129,7 @@ def test_opus5_bridges_to_chat_and_returns_response_object(client, anthropic_tok
     assert body["usage"]["input_tokens"] == 12 and body["usage"]["output_tokens"] == 4
 
     sent = seen["request"]
-    assert sent["model"] == "claude-opus-5"
+    assert sent["model"] == "claude-opus-5-5"
     assert sent["max_tokens"] == 256
     kinds = [block.get("type") for m in sent["messages"] if isinstance(m["content"], list) for block in m["content"]]
     assert "tool_use" in kinds and "tool_result" in kinds
@@ -137,7 +137,7 @@ def test_opus5_bridges_to_chat_and_returns_response_object(client, anthropic_tok
 
 def test_opus5_streaming_bridge_emits_responses_events(client, anthropic_token, monkeypatch):
     def chunk(delta, finish=None, usage=None):
-        obj = {"id": "chatcmpl-1", "object": "chat.completion.chunk", "model": "opus-5",
+        obj = {"id": "chatcmpl-1", "object": "chat.completion.chunk", "model": "opus-5-5",
                "choices": [{"index": 0, "delta": delta, "finish_reason": finish}]}
         if usage:
             obj["usage"] = usage
@@ -154,7 +154,7 @@ def test_opus5_streaming_bridge_emits_responses_events(client, anthropic_token, 
         yield "data: [DONE]\n\n"
 
     monkeypatch.setattr(openai_chat, "create_openai_stream", fake_stream)
-    resp = client.post("/v1/responses", json={"model": "opus-5", "input": "hi", "stream": True})
+    resp = client.post("/v1/responses", json={"model": "opus-5-5", "input": "hi", "stream": True})
     assert resp.status_code == 200
     events = _parse_events(resp.text)
     types = [e["type"] for e in events]
@@ -191,7 +191,7 @@ def test_streaming_bridge_upstream_400_before_output_is_400(client, anthropic_to
         yield f"data: {json.dumps({'error': {'message': 'prompt is too long', 'type': 'invalid_request_error'}})}\n\n"
 
     monkeypatch.setattr(openai_chat, "create_openai_stream", fake_stream)
-    resp = client.post("/v1/responses", json={"model": "opus-5", "input": "hi", "stream": True})
+    resp = client.post("/v1/responses", json={"model": "opus-5-5", "input": "hi", "stream": True})
     assert resp.status_code == 400
     assert resp.json()["error"]["message"] == "prompt is too long"
 
@@ -201,7 +201,7 @@ def test_bridge_upstream_400_non_stream_is_400(client, anthropic_token, monkeypa
         return httpx.Response(400, json={"type": "error", "error": {"type": "invalid_request_error", "message": "bad tools"}})
 
     monkeypatch.setattr(openai_chat, "make_anthropic_request", fake_anthropic)
-    resp = client.post("/v1/responses", json={"model": "opus-5", "input": "hi"})
+    resp = client.post("/v1/responses", json={"model": "opus-5-5", "input": "hi"})
     assert resp.status_code == 400
     assert resp.json()["error"]["message"] == "bad tools"
 
@@ -225,7 +225,7 @@ def test_responses_to_chat_request_maps_tools_and_choice():
         "tools": [{"type": "function", "name": "f", "description": "d", "parameters": {"type": "object"}},
                   {"type": "web_search"}],
         "tool_choice": {"type": "function", "name": "f"},
-    }, "opus-5")
+    }, "opus-5-5")
     assert chat["messages"] == [{"role": "user", "content": "hi"}]
     assert chat["tools"] == [{"type": "function", "function": {"name": "f", "description": "d", "parameters": {"type": "object"}}}]
     assert chat["tool_choice"] == {"type": "function", "function": {"name": "f"}}

@@ -83,14 +83,6 @@ BASE_MODELS: List[BaseModelSpec] = [
         max_completion_tokens=131_072,  # 128K per official docs
     ),
     BaseModelSpec(
-        openai_id="sonnet-5",
-        anthropic_id="claude-sonnet-5",
-        created=1782864000,  # July 1, 2026
-        owned_by="anthropic",
-        context_length=1_000_000,
-        max_completion_tokens=131_072,  # 128K per official docs
-    ),
-    BaseModelSpec(
         openai_id="sonnet-5-5",
         anthropic_id="claude-sonnet-5-5",
         created=1790121600,  # September 23, 2026 (with opus-5-5)
@@ -110,17 +102,6 @@ BASE_MODELS: List[BaseModelSpec] = [
         openai_id="opus-5-5",
         anthropic_id="claude-opus-5-5",
         created=1790121600,  # September 23, 2026
-        owned_by="anthropic",
-        context_length=1_000_000,
-        max_completion_tokens=131_072,
-    ),
-    BaseModelSpec(
-        # claude-opus-5 is served by Anthropic (verified live) and clients
-        # (Letta App Server) ask for it as "opus-5"; limits assumed to match
-        # opus-5-5.
-        openai_id="opus-5",
-        anthropic_id="claude-opus-5",
-        created=1785542400,  # August 1, 2026 (approximate)
         owned_by="anthropic",
         context_length=1_000_000,
         max_completion_tokens=131_072,
