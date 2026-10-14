@@ -75,11 +75,11 @@ class ModelRegistryEntry:
 
 BASE_MODELS: List[BaseModelSpec] = [
     BaseModelSpec(
-        openai_id="fable-5",
-        anthropic_id="claude-fable-5",
-        created=1780272000,  # June 1, 2026 (approximate release)
+        openai_id="fable-5-1",
+        anthropic_id="claude-fable-5-1",
+        created=1790121600,  # fable-5 (deprecated) replaced by 5.1
         owned_by="anthropic",
-        context_length=200_000,
+        context_length=1_000_000,
         max_completion_tokens=131_072,  # 128K per official docs
     ),
     BaseModelSpec(
