@@ -10,66 +10,14 @@ import sys
 
 import httpx
 import pytest
-from fastapi import FastAPI
-from fastapi.testclient import TestClient
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from proxy.endpoints import openai_chat, openai_responses  # noqa: E402
+from proxy.endpoints import openai_chat  # noqa: E402
 from proxy.endpoints.responses_translation import (  # noqa: E402
     normalize_responses_input,
     responses_to_chat_request,
 )
-
-
-def _sse(obj, event=None):
-    head = f"event: {event}\n" if event else ""
-    return f"{head}data: {json.dumps(obj)}\n\n"
-
-
-CODEX_TEXT_STREAM = "".join([
-    _sse({"type": "response.created", "response": {"id": "resp_1", "status": "in_progress", "output": []}}, "response.created"),
-    _sse({"type": "response.output_item.added", "output_index": 0,
-          "item": {"id": "msg_1", "type": "message", "status": "in_progress", "content": [], "role": "assistant"}},
-         "response.output_item.added"),
-    _sse({"type": "response.output_text.delta", "output_index": 0, "item_id": "msg_1", "content_index": 0, "delta": "Hi!"},
-         "response.output_text.delta"),
-    _sse({"type": "response.output_item.done", "output_index": 0,
-          "item": {"id": "msg_1", "type": "message", "status": "completed", "role": "assistant",
-                   "content": [{"type": "output_text", "annotations": [], "text": "Hi!"}]}},
-         "response.output_item.done"),
-    _sse({"type": "response.completed", "response": {"id": "resp_1", "object": "response", "status": "completed",
-                                                     "model": "gpt-5.6-sol", "output": [],
-                                                     "usage": {"input_tokens": 5, "output_tokens": 2, "total_tokens": 7}}},
-         "response.completed"),
-])
-
-
-@pytest.fixture
-def client():
-    app = FastAPI()
-    app.include_router(openai_responses.router)
-    return TestClient(app)
-
-
-@pytest.fixture
-def chatgpt_upstream(monkeypatch):
-    """Mock ChatGPT OAuth + backend; returns a dict capturing the upstream call."""
-    captured = {"status": 200, "body": CODEX_TEXT_STREAM}
-
-    async def creds():
-        return "token", "account"
-
-    def handler(request: httpx.Request):
-        captured["payload"] = json.loads(request.content)
-        captured["headers"] = dict(request.headers)
-        return httpx.Response(captured["status"], content=captured["body"].encode(),
-                              headers={"content-type": "text/event-stream"})
-
-    monkeypatch.setattr(openai_chat.chatgpt_oauth_manager, "get_auth_credentials_async", creds)
-    monkeypatch.setattr(openai_responses, "_make_client",
-                        lambda timeout: httpx.AsyncClient(transport=httpx.MockTransport(handler)))
-    return captured
 
 
 def _parse_events(text):
@@ -151,7 +99,7 @@ def test_opus5_bridges_to_chat_and_returns_response_object(client, anthropic_tok
     async def fake_anthropic(anthropic_request, access_token, beta_headers):
         seen["request"] = anthropic_request
         return httpx.Response(200, json={
-            "id": "msg_1", "type": "message", "role": "assistant", "model": "claude-opus-5",
+            "id": "msg_1", "type": "message", "role": "assistant", "model": "claude-opus-5-5",
             "content": [{"type": "text", "text": "Hello from Opus"},
                         {"type": "tool_use", "id": "toolu_1", "name": "lookup", "input": {"q": "x"}}],
             "stop_reason": "tool_use",
@@ -160,7 +108,7 @@ def test_opus5_bridges_to_chat_and_returns_response_object(client, anthropic_tok
 
     monkeypatch.setattr(openai_chat, "make_anthropic_request", fake_anthropic)
     resp = client.post("/v1/responses", json={
-        "model": "opus-5",
+        "model": "opus-5-5",
         "instructions": "Be terse.",
         "input": [
             {"type": "message", "role": "user", "content": [{"type": "input_text", "text": "hi"}]},
@@ -172,7 +120,7 @@ def test_opus5_bridges_to_chat_and_returns_response_object(client, anthropic_tok
     })
     assert resp.status_code == 200, resp.text
     body = resp.json()
-    assert body["object"] == "response" and body["model"] == "opus-5"
+    assert body["object"] == "response" and body["model"] == "opus-5-5"
     assert body["output"][0]["type"] == "message"
     assert body["output"][0]["content"][0]["text"] == "Hello from Opus"
     call = body["output"][1]
@@ -181,7 +129,7 @@ def test_opus5_bridges_to_chat_and_returns_response_object(client, anthropic_tok
     assert body["usage"]["input_tokens"] == 12 and body["usage"]["output_tokens"] == 4
 
     sent = seen["request"]
-    assert sent["model"] == "claude-opus-5"
+    assert sent["model"] == "claude-opus-5-5"
     assert sent["max_tokens"] == 256
     kinds = [block.get("type") for m in sent["messages"] if isinstance(m["content"], list) for block in m["content"]]
     assert "tool_use" in kinds and "tool_result" in kinds
@@ -189,7 +137,7 @@ def test_opus5_bridges_to_chat_and_returns_response_object(client, anthropic_tok
 
 def test_opus5_streaming_bridge_emits_responses_events(client, anthropic_token, monkeypatch):
     def chunk(delta, finish=None, usage=None):
-        obj = {"id": "chatcmpl-1", "object": "chat.completion.chunk", "model": "opus-5",
+        obj = {"id": "chatcmpl-1", "object": "chat.completion.chunk", "model": "opus-5-5",
                "choices": [{"index": 0, "delta": delta, "finish_reason": finish}]}
         if usage:
             obj["usage"] = usage
@@ -206,7 +154,7 @@ def test_opus5_streaming_bridge_emits_responses_events(client, anthropic_token, 
         yield "data: [DONE]\n\n"
 
     monkeypatch.setattr(openai_chat, "create_openai_stream", fake_stream)
-    resp = client.post("/v1/responses", json={"model": "opus-5", "input": "hi", "stream": True})
+    resp = client.post("/v1/responses", json={"model": "opus-5-5", "input": "hi", "stream": True})
     assert resp.status_code == 200
     events = _parse_events(resp.text)
     types = [e["type"] for e in events]
@@ -243,7 +191,7 @@ def test_streaming_bridge_upstream_400_before_output_is_400(client, anthropic_to
         yield f"data: {json.dumps({'error': {'message': 'prompt is too long', 'type': 'invalid_request_error'}})}\n\n"
 
     monkeypatch.setattr(openai_chat, "create_openai_stream", fake_stream)
-    resp = client.post("/v1/responses", json={"model": "opus-5", "input": "hi", "stream": True})
+    resp = client.post("/v1/responses", json={"model": "opus-5-5", "input": "hi", "stream": True})
     assert resp.status_code == 400
     assert resp.json()["error"]["message"] == "prompt is too long"
 
@@ -253,7 +201,7 @@ def test_bridge_upstream_400_non_stream_is_400(client, anthropic_token, monkeypa
         return httpx.Response(400, json={"type": "error", "error": {"type": "invalid_request_error", "message": "bad tools"}})
 
     monkeypatch.setattr(openai_chat, "make_anthropic_request", fake_anthropic)
-    resp = client.post("/v1/responses", json={"model": "opus-5", "input": "hi"})
+    resp = client.post("/v1/responses", json={"model": "opus-5-5", "input": "hi"})
     assert resp.status_code == 400
     assert resp.json()["error"]["message"] == "bad tools"
 
@@ -277,7 +225,7 @@ def test_responses_to_chat_request_maps_tools_and_choice():
         "tools": [{"type": "function", "name": "f", "description": "d", "parameters": {"type": "object"}},
                   {"type": "web_search"}],
         "tool_choice": {"type": "function", "name": "f"},
-    }, "opus-5")
+    }, "opus-5-5")
     assert chat["messages"] == [{"role": "user", "content": "hi"}]
     assert chat["tools"] == [{"type": "function", "function": {"name": "f", "description": "d", "parameters": {"type": "object"}}}]
     assert chat["tool_choice"] == {"type": "function", "function": {"name": "f"}}

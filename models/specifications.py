@@ -75,36 +75,33 @@ class ModelRegistryEntry:
 
 BASE_MODELS: List[BaseModelSpec] = [
     BaseModelSpec(
-        openai_id="fable-5",
-        anthropic_id="claude-fable-5",
-        created=1780272000,  # June 1, 2026 (approximate release)
-        owned_by="anthropic",
-        context_length=200_000,
-        max_completion_tokens=131_072,  # 128K per official docs
-    ),
-    BaseModelSpec(
-        openai_id="sonnet-5",
-        anthropic_id="claude-sonnet-5",
-        created=1782864000,  # July 1, 2026
+        openai_id="fable-5-1",
+        anthropic_id="claude-fable-5-1",
+        created=1790121600,  # fable-5 (deprecated) replaced by 5.1
         owned_by="anthropic",
         context_length=1_000_000,
         max_completion_tokens=131_072,  # 128K per official docs
     ),
     BaseModelSpec(
-        openai_id="opus-5-5",
-        anthropic_id="claude-opus-5-5",
-        created=1790121600,  # September 23, 2026
+        openai_id="sonnet-5-5",
+        anthropic_id="claude-sonnet-5-5",
+        created=1790121600,  # September 23, 2026 (with opus-5-5)
         owned_by="anthropic",
         context_length=1_000_000,
         max_completion_tokens=131_072,
     ),
     BaseModelSpec(
-        # claude-opus-5 is served by Anthropic (verified live) and clients
-        # (Letta App Server) ask for it as "opus-5"; limits assumed to match
-        # opus-5-5.
-        openai_id="opus-5",
-        anthropic_id="claude-opus-5",
-        created=1785542400,  # August 1, 2026 (approximate)
+        openai_id="haiku-5-5",
+        anthropic_id="claude-haiku-5-5",
+        created=1790121600,
+        owned_by="anthropic",
+        context_length=200_000,
+        max_completion_tokens=65_536,
+    ),
+    BaseModelSpec(
+        openai_id="opus-5-5",
+        anthropic_id="claude-opus-5-5",
+        created=1790121600,  # September 23, 2026
         owned_by="anthropic",
         context_length=1_000_000,
         max_completion_tokens=131_072,
