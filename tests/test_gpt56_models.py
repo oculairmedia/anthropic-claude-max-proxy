@@ -35,7 +35,7 @@ def test_new_56_models_registered():
 
 
 def test_gpt6_sol_and_luna_registered():
-    for base in ("gpt-6-sol", "gpt-6-luna"):
+    for base in ("gpt-6-sol", "gpt-6-luna", "gpt-6.1-sol"):
         assert is_chatgpt_model(base), f"{base} not registered"
         assert base in MODEL_REGISTRY, f"{base} missing from MODEL_REGISTRY"
 
@@ -99,9 +99,9 @@ def test_openai_native_alias_mapping():
 
 
 def test_context_window_and_output():
-    for base in ("gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-6-sol", "gpt-6-luna"):
+    for base in ("gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-6-sol", "gpt-6-luna", "gpt-6.1-sol"):
         cfg = CHATGPT_MODELS_CONFIG[base]
-        assert cfg["context_length"] == 372000, base
+        assert cfg["context_length"] == 1000000, base
         assert cfg["max_completion_tokens"] == 128000, base
         assert cfg["supports_vision"] is True, base
 
@@ -152,3 +152,9 @@ def _run():
 
 if __name__ == "__main__":
     sys.exit(1 if _run() else 0)
+
+
+def test_gpt_61_sol_registered_with_ultra():
+    assert is_chatgpt_model("gpt-6.1-sol")
+    assert is_chatgpt_model("gpt-6.1-sol-reasoning-ultra")
+    assert get_openai_model_id("gpt-6.1-sol-reasoning-ultra") == "gpt-6.1-sol-ultra"
