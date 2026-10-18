@@ -257,13 +257,13 @@ def _load_chatgpt_models() -> None:
         # Specs discovered from the live ChatGPT/Codex backend:
         # https://chatgpt.com/backend-api/codex/models
         # All: text+image input (supports_vision=True), agentic coding models
-        # (CHATGPT_GPT5_CODEX_INSTRUCTIONS), context_window 372000 (backend default) but the provider
-        # serves up to 1M, so we advertise 1,000,000.
+        # (CHATGPT_GPT5_CODEX_INSTRUCTIONS), max_context_window 872000 as reported by the live backend
+        # (default context_window is lower: 500k for 6.1-sol, 272k others).
         {
             "id": "gpt-5.6-sol",
             "openai_id": "gpt-5.6-sol",
             "owned_by": "openai-chatgpt",
-            "context_length": 1000000,
+            "context_length": 872000,
             "max_completion_tokens": 128000,
             "supports_reasoning": True,
             "supports_vision": True,
@@ -275,7 +275,7 @@ def _load_chatgpt_models() -> None:
             "id": "gpt-5.6-terra",
             "openai_id": "gpt-5.6-terra",
             "owned_by": "openai-chatgpt",
-            "context_length": 1000000,
+            "context_length": 872000,
             "max_completion_tokens": 128000,
             "supports_reasoning": True,
             "supports_vision": True,
@@ -287,7 +287,7 @@ def _load_chatgpt_models() -> None:
             "id": "gpt-6.1-sol",
             "openai_id": "gpt-6.1-sol",
             "owned_by": "openai-chatgpt",
-            "context_length": 1000000,
+            "context_length": 872000,
             "max_completion_tokens": 128000,
             "supports_reasoning": True,
             "supports_vision": True,
@@ -299,7 +299,7 @@ def _load_chatgpt_models() -> None:
             "id": "gpt-6-sol",
             "openai_id": "gpt-6-sol",
             "owned_by": "openai-chatgpt",
-            "context_length": 1000000,
+            "context_length": 872000,
             "max_completion_tokens": 128000,
             "supports_reasoning": True,
             "supports_vision": True,
@@ -310,7 +310,7 @@ def _load_chatgpt_models() -> None:
             "id": "gpt-6-luna",
             "openai_id": "gpt-6-luna",
             "owned_by": "openai-chatgpt",
-            "context_length": 1000000,
+            "context_length": 872000,
             "max_completion_tokens": 128000,
             "supports_reasoning": True,
             "supports_vision": True,
@@ -321,7 +321,7 @@ def _load_chatgpt_models() -> None:
             "id": "gpt-5.6-luna",
             "openai_id": "gpt-5.6-luna",
             "owned_by": "openai-chatgpt",
-            "context_length": 1000000,
+            "context_length": 872000,
             "max_completion_tokens": 128000,
             "supports_reasoning": True,
             "supports_vision": True,

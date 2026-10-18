@@ -101,7 +101,7 @@ def test_openai_native_alias_mapping():
 def test_context_window_and_output():
     for base in ("gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-6-sol", "gpt-6-luna", "gpt-6.1-sol"):
         cfg = CHATGPT_MODELS_CONFIG[base]
-        assert cfg["context_length"] == 1000000, base
+        assert cfg["context_length"] == 872000, base
         assert cfg["max_completion_tokens"] == 128000, base
         assert cfg["supports_vision"] is True, base
 
