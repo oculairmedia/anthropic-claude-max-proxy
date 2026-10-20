@@ -307,6 +307,17 @@ def _load_chatgpt_models() -> None:
             "default_instructions": CHATGPT_GPT5_CODEX_INSTRUCTIONS,
         },
         {
+            "id": "gpt-6-astra",
+            "openai_id": "gpt-6-astra",
+            "owned_by": "openai-chatgpt",
+            "context_length": 872000,
+            "max_completion_tokens": 128000,
+            "supports_reasoning": True,
+            "supports_vision": True,
+            "supported_efforts": ["low", "medium", "high", "xhigh", "max", "ultra"],
+            "default_instructions": CHATGPT_GPT5_CODEX_INSTRUCTIONS,
+        },
+        {
             "id": "gpt-6-luna",
             "openai_id": "gpt-6-luna",
             "owned_by": "openai-chatgpt",
