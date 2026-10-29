@@ -1,7 +1,8 @@
 """Anthropic API HTTP client for making requests"""
 
+import json
 import logging
-from typing import Dict, Any, Optional, AsyncIterator, TYPE_CHECKING
+from typing import Any, AsyncIterator, Dict, List, Optional, TYPE_CHECKING
 
 import httpx
 
@@ -16,10 +17,42 @@ if TYPE_CHECKING:
     from stream_debug import StreamTracer
 
 
+def describe_message_shape(messages: Any, last_n: int = 3) -> List[Dict[str, Any]]:
+    """Content-free shape of the last messages: role plus block types, no text."""
+    shape: List[Dict[str, Any]] = []
+    for msg in (messages or [])[-last_n:]:
+        if not isinstance(msg, dict):
+            shape.append({"role": type(msg).__name__})
+            continue
+        content = msg.get("content")
+        if isinstance(content, list):
+            blocks = [b.get("type", "?") if isinstance(b, dict) else type(b).__name__ for b in content]
+        else:
+            blocks = [f"str({len(content)}ch)" if isinstance(content, str) else type(content).__name__]
+        shape.append({"role": msg.get("role"), "blocks": blocks})
+    return shape
+
+
+def log_upstream_400_shape(request_id: Optional[str], status_code: int, anthropic_request: Dict[str, Any]) -> None:
+    """On an upstream 400, WARN the shape of the last translated messages.
+
+    Lets a recurrence of request-shape rejections (e.g. letta-mobile-fosvg's
+    "assistant message prefill") be diagnosed from proxy.log alone.
+    """
+    if status_code != 400:
+        return
+    messages = anthropic_request.get("messages") or []
+    logger.warning(
+        f"[{request_id or '-'}] Upstream 400 request shape: {len(messages)} messages, "
+        f"last {min(3, len(messages))}: {json.dumps(describe_message_shape(messages))}"
+    )
+
+
 async def make_anthropic_request(
     anthropic_request: Dict[str, Any],
     access_token: str,
-    client_beta_headers: Optional[str] = None
+    client_beta_headers: Optional[str] = None,
+    request_id: Optional[str] = None,
 ) -> httpx.Response:
     """Make a non-streaming request to Anthropic API
 
@@ -62,6 +95,7 @@ async def make_anthropic_request(
             json=anthropic_request,
             headers=headers
         )
+        log_upstream_400_shape(request_id, response.status_code, anthropic_request)
         return response
 
 
@@ -141,6 +175,7 @@ async def stream_anthropic_response(
                 error_text = await response.aread()
                 error_json = error_text.decode()
                 logger.error(f"[{request_id}] Anthropic API error {response.status_code}: {error_json}")
+                log_upstream_400_shape(request_id, response.status_code, anthropic_request)
                 if tracer:
                     tracer.log_error(f"anthropic error status={response.status_code} body={error_json}")
 

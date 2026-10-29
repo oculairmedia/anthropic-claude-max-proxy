@@ -96,7 +96,7 @@ def anthropic_token(monkeypatch):
 def test_opus5_bridges_to_chat_and_returns_response_object(client, anthropic_token, monkeypatch):
     seen = {}
 
-    async def fake_anthropic(anthropic_request, access_token, beta_headers):
+    async def fake_anthropic(anthropic_request, access_token, beta_headers, **kwargs):
         seen["request"] = anthropic_request
         return httpx.Response(200, json={
             "id": "msg_1", "type": "message", "role": "assistant", "model": "claude-opus-5-5",
@@ -197,7 +197,7 @@ def test_streaming_bridge_upstream_400_before_output_is_400(client, anthropic_to
 
 
 def test_bridge_upstream_400_non_stream_is_400(client, anthropic_token, monkeypatch):
-    async def fake_anthropic(*args):
+    async def fake_anthropic(*args, **kwargs):
         return httpx.Response(400, json={"type": "error", "error": {"type": "invalid_request_error", "message": "bad tools"}})
 
     monkeypatch.setattr(openai_chat, "make_anthropic_request", fake_anthropic)

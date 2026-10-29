@@ -127,6 +127,33 @@ def _append_tool_call(messages: List[Dict[str, Any]], item: Dict[str, Any]) -> N
         messages.append({"role": "assistant", "content": None, "tool_calls": [call]})
 
 
+def _append_assistant_text(messages: List[Dict[str, Any]], text: str) -> None:
+    """Add an assistant `message` item, keeping it ahead of the turn's tool calls.
+
+    LiteLLM's Anthropic -> Responses adapter emits an assistant turn
+    ``[text, tool_use]`` as the ``function_call`` items first and the
+    ``message`` item after them. Appending that message as a new assistant
+    message yields Anthropic content ``[tool_use, text]``; as the last
+    assistant turn, models without prefill support (Opus/Sonnet 5.5) reject it
+    with "does not support assistant message prefill" (letta-mobile-fosvg).
+    While the tool-call turn is still open (no tool output or user message
+    since), the text belongs to that turn, so fold it into its `content`,
+    which the Anthropic converter renders before the tool_use blocks.
+    """
+    last = messages[-1] if messages else None
+    if not (last and last.get("role") == "assistant" and last.get("tool_calls")):
+        messages.append({"role": "assistant", "content": text})
+        return
+    if not text:
+        return
+    existing = last.get("content")
+    if not existing:
+        last["content"] = text
+        return
+    parts = existing if isinstance(existing, list) else [{"type": "text", "text": existing}]
+    last["content"] = parts + [{"type": "text", "text": text}]
+
+
 def _tool_output_text(output: Any) -> str:
     if isinstance(output, str):
         return output
@@ -144,7 +171,7 @@ def responses_input_to_messages(items: List[Dict[str, Any]]) -> List[Dict[str, A
             if role in ("system", "developer"):
                 messages.append({"role": "system", "content": _content_text(item.get("content"))})
             elif role == "assistant":
-                messages.append({"role": "assistant", "content": _content_text(item.get("content"))})
+                _append_assistant_text(messages, _content_text(item.get("content")))
             else:
                 messages.append({"role": "user", "content": _user_content_to_chat(item.get("content"))})
         elif kind == "function_call":
